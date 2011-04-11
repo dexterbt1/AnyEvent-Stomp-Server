@@ -71,7 +71,7 @@ sub read_frame {
                     my $protocol_class = $self->protocol_classes->{$proto_version};
                     if (not $protocol_class) {
                         $self->handle->push_write( join($CRLF, "ERROR", sprintf("content-type:%s", 'text/plain'), '', 'Supported protocol version are '.join(",", @server_versions).$NULL ) );
-                        $self->disconnect("Client unsupported");
+                        $self->disconnect("Unsupported client protocol version");
                         last;
                     }
                     load_class $protocol_class;
