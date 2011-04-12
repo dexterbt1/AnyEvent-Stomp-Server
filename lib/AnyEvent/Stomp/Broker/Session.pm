@@ -45,7 +45,9 @@ sub read_frame {
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
         print STDERR Dump($frame);
+
         if (not $self->is_connected) {
+            # client did not issue a CONNECT yet
             if ($frame->{command} eq 'CONNECT') {
                 my $response_frame = Net::Stomp::Frame->new({
                     command => 'CONNECTED',
@@ -73,15 +75,7 @@ sub read_frame {
                         }
                     }
                     if (not $proto_version) {
-                        $self->send_client_frame( 
-                            Net::Stomp::Frame->new({
-                                command => 'ERROR',
-                                headers => {
-                                    "content-type" => 'text/plain',
-                                },
-                                body => "Supported protocol versions are: ".join(', ', sort keys %SERVER_PROTOCOLS)."\n",
-                            })
-                        );
+                        $self->send_client_error( "Supported protocol versions are: ".join(', ', sort keys %SERVER_PROTOCOLS), $frame );
                         $self->disconnect("Unsupported client protocol version: ".$self);
                         return;
                     }
@@ -90,18 +84,11 @@ sub read_frame {
 
                 $self->send_client_frame( $response_frame );
                 $self->is_connected( 1 );
+                $self->protocol_version( $proto_version );
                 return 1;
             }
             else {
-                $self->send_client_frame( 
-                    Net::Stomp::Frame->new({
-                        command => 'ERROR',
-                        headers => {
-                            "content-type" => 'text/plain',
-                        },
-                        body => "Not yet connected.\n"
-                    })
-                );
+                $self->send_client_error( 'Not yet connected', $frame );
                 $self->disconnect("Client did not issue a proper CONNECT: ".$self);
             }
         }
@@ -115,23 +102,29 @@ sub read_frame {
                 $self->parent_broker->backend->send($self, $frame);
             }
             elsif ($frame->{command} eq 'SUBSCRIBE') {
-                $self->parent_broker->backend->subscribe($self, $frame);
+                # validate subscribe frame
+                (exists $frame->{headers}->{'destination'})
+                    or do {
+                        $self->send_client_error( 'SUBSCRIBE header "destination" required', $frame);
+                        return;
+                    };
+                my $subscription_id = $frame->{headers}->{'destination'};
+                if ($self->protocol_version eq '1.1') {
+                    # Stomp 1.1 checks
+                    (exists $frame->{headers}->{'id'})
+                        or do {
+                            $self->send_client_error( 'SUBSCRIBE header "id" required', $frame);
+                            return;
+                        };
+                    $subscription_id = $frame->{headers}->{'id'};
+                }
+                # TODO: policy for repeat subscription_id
+                $self->parent_broker->backend->subscribe($self, $frame, $subscription_id);
             }
             else {
                 # unexpected frame
-                my $response_frame = Net::Stomp::Frame->new({
-                    command => 'ERROR',
-                    headers => {
-                        "content-type" => 'text/plain',
-                    },
-                    body => "Unexpected Frame.\n"
-                });
-                if (exists $frame->{headers}->{'receipt'}) {
-                    $response_frame->{headers}->{'receipt-id'} = $frame->{headers}->{'receipt'};
-                }
-                $self->send_client_frame( $response_frame );
+                $self->send_client_error( 'Unexpected frame', $frame );
             }
-            
         }
     });
 }
@@ -160,6 +153,15 @@ sub send_client_receipt {
 }
 
 
+sub send_client_error {
+    my ($self, $message, $original_frame) = @_;
+    my $f = Net::Stomp::Frame->new({ command => 'ERROR', headers => { 'content-type' => 'text/plain' }, body => $message."\n" });
+    if ($original_frame && exists($original_frame->{headers}->{'receipt'})) { 
+        $f->{headers}->{'receipt-id'} = $original_frame->{headers}->{'receipt'};
+    }
+    $f->{headers}->{bytes_message} = 1; # FIXME: hardcode feature from Net::Stomp
+    $self->send_client_frame( $f );
+}
 
 1;
 

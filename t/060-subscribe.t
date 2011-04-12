@@ -61,6 +61,62 @@ my $client;
     undef $client; # disconnect
 }
 
+# v1.0 subscribe w/out destination
+{
+    # connect
+    my $connected = AE::cv;
+    my $subscribed = AE::cv;
+    my $backend_subscribe_not_called = 1;
+    $backend->subscribe_cb(sub {
+        $backend_subscribe_not_called = 0;
+    });
+    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, undef );
+    $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
+    $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
+    $client->reg_cb( CONNECTED => sub { 
+        $connected->send(1); 
+        $client->send_frame( SUBSCRIBE => '', { 'receipt' => '1234' } );
+    });
+    $client->reg_cb( ERROR => sub { 
+        # expect an error
+        my $headers = $_[2];
+        is $headers->{'receipt-id'}, '1234';
+        $subscribed->send(0); 
+    });
+    ok $connected->recv;
+    ok not($subscribed->recv);
+    ok $backend_subscribe_not_called;
+    undef $client; # disconnect
+}
+
+# v1.1 subscribe w/out id
+{
+    # connect
+    my $connected = AE::cv;
+    my $subscribed = AE::cv;
+    my $backend_subscribe_not_called = 1;
+    $backend->subscribe_cb(sub {
+        $backend_subscribe_not_called = 0;
+    });
+    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
+    $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
+    $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
+    $client->reg_cb( CONNECTED => sub { 
+        $connected->send(1); 
+        $client->send_frame( SUBSCRIBE => '', { 'receipt' => '1234' } );
+    });
+    $client->reg_cb( ERROR => sub { 
+        # expect an error
+        my $headers = $_[2];
+        is $headers->{'receipt-id'}, '1234';
+        $subscribed->send(0); 
+    });
+    ok $connected->recv;
+    ok not($subscribed->recv);
+    ok $backend_subscribe_not_called;
+    undef $client; # disconnect
+}
+
 
 ok 1;
 
