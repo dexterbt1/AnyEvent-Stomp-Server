@@ -4,6 +4,7 @@ use Moose;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Stomp::Broker::Session;
+use AnyEvent::Stomp::Broker::Backend
 
 has 'listen_host' 
     => ( is => 'rw', isa => 'Str', lazy => 1, default => sub { '0.0.0.0' }, );
@@ -11,6 +12,8 @@ has 'listen_port'
     => ( is => 'rw', isa => 'Int', required => 1 );
 has 'session_class' 
     => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Stomp::Broker::Session' );
+has 'backend'
+    => ( is => 'rw', does => 'AnyEvent::Stomp::Broker::Backend', required => 1 );
 
 sub BUILD {
     my ($self) = @_;

@@ -3,6 +3,7 @@ use strict;
 use Class::Load ':all';
 use Moose;
 use YAML;
+use Scalar::Util qw/refaddr/;
 
 our $DEFAULT_PROTOCOL = '1.0';
 our %SERVER_PROTOCOLS = (
@@ -11,13 +12,17 @@ our %SERVER_PROTOCOLS = (
 );
 
 has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Broker', weak_ref => 1 );
+
 has 'socket'                => ( is => 'rw', isa => 'GlobRef', required => 1, );
 has 'host'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
 has 'handle'                => ( is => 'rw', isa => 'Any' );
+
 has 'is_connected'          => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
+has 'session_id'            => ( is => 'rw', isa => 'Any' );
+
 
 sub BUILD {
     my ($self) = @_;
@@ -31,6 +36,7 @@ sub BUILD {
         on_read     => sub { $self->read_frame( @_ ) },
     );
     $self->handle($ch);
+    $self->session_id( refaddr($self) );
 }
 
 
@@ -38,13 +44,13 @@ sub read_frame {
     my ($self, $ch) = @_;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
-        #print STDERR Dump($frame);
+        ## print STDERR Dump($frame);
         if (not $self->is_connected) {
             if ($frame->{command} eq 'CONNECT') {
                 my $response_frame = Net::Stomp::Frame->new({
                     command => 'CONNECTED',
                     headers => {
-                        "session-id"    => sprintf("%s",$self),
+                        "session-id"    => sprintf("%s",$self->session_id),
                         "version"       => $DEFAULT_PROTOCOL,
                         "server"        => ref($self->parent_broker),
                     },
@@ -99,8 +105,13 @@ sub read_frame {
             }
         }
         else {
+            # already connected
+            # -----------------
             if ($frame->{command} eq 'DISCONNECT') {
                 $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
+            }
+            elsif ($frame->{command} eq 'SEND') {
+                $self->parent_broker->backend->send($frame);
             }
             else {
                 # unexpected frame
