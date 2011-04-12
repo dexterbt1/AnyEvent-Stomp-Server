@@ -44,7 +44,7 @@ sub read_frame {
     my ($self, $ch) = @_;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
-        #print STDERR Dump($frame);
+        print STDERR Dump($frame);
         if (not $self->is_connected) {
             if ($frame->{command} eq 'CONNECT') {
                 my $response_frame = Net::Stomp::Frame->new({
@@ -114,6 +114,9 @@ sub read_frame {
             elsif ($frame->{command} eq 'SEND') {
                 $self->parent_broker->backend->send($self, $frame);
             }
+            elsif ($frame->{command} eq 'SUBSCRIBE') {
+                $self->parent_broker->backend->subscribe($self, $frame);
+            }
             else {
                 # unexpected frame
                 my $response_frame = Net::Stomp::Frame->new({
@@ -148,6 +151,12 @@ sub disconnect {
 sub send_client_frame {
     my ($self, $frame) = @_;
     $self->handle->push_write( $frame->as_string );
+}
+
+
+sub send_client_receipt {
+    my ($self, $receipt_id) = @_;
+    $self->send_client_frame( Net::Stomp::Frame->new({ command => 'RECEIPT', headers => { 'receipt-id' => $receipt_id }, body => '' }) );
 }
 
 
