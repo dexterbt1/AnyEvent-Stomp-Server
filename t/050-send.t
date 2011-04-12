@@ -1,6 +1,5 @@
 use strict;
 use Test::More qw/no_plan/;
-use Test::Mock::Class ':all';
 
 BEGIN {
     use_ok 'AnyEvent::Stomp::Broker';

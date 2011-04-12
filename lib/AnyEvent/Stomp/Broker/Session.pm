@@ -44,7 +44,7 @@ sub read_frame {
     my ($self, $ch) = @_;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
-        ## print STDERR Dump($frame);
+        #print STDERR Dump($frame);
         if (not $self->is_connected) {
             if ($frame->{command} eq 'CONNECT') {
                 my $response_frame = Net::Stomp::Frame->new({
@@ -85,6 +85,7 @@ sub read_frame {
                         $self->disconnect("Unsupported client protocol version: ".$self);
                         return;
                     }
+                    $response_frame->{headers}->{'version'} = $proto_version;
                 }
 
                 $self->send_client_frame( $response_frame );
