@@ -18,7 +18,7 @@ sub anyevent_read_type {
                         $command = $line;
                         next;
                     }
-                    my ($k, $v) = split /\s*:\s*/, $line, 2;
+                    my ($k, $v) = split /:/, $line, 2;
                     $headers->{$k} = $v;
                 }
                 my @args = ('regex' => qr/.*?\000\n*/s);
