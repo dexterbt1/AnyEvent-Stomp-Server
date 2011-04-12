@@ -22,7 +22,7 @@ my $client;
     my $connected = AE::cv;
     my $sent = AE::cv;
     $backend->send_cb( sub {
-        my (undef,$frame) = @_;
+        my (undef,undef,$frame) = @_;
         is $frame->{command}, 'SEND';
         is $frame->{headers}->{'destination'}, 'foo';
         is $frame->{body}, 'hello world';
@@ -33,7 +33,7 @@ my $client;
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
     ok $connected->recv;
-    # send
+    # send and ensure backend gets the frame
     $client->send('hello world', 'foo');
     ok $sent->recv;
     undef $client; # disconnect

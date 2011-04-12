@@ -111,7 +111,7 @@ sub read_frame {
                 $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
             }
             elsif ($frame->{command} eq 'SEND') {
-                $self->parent_broker->backend->send($frame);
+                $self->parent_broker->backend->send($self, $frame);
             }
             else {
                 # unexpected frame
