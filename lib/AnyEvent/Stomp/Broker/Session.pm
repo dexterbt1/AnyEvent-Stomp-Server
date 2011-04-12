@@ -50,7 +50,7 @@ sub read_frame {
                 my $response_frame = Net::Stomp::Frame->new({
                     command => 'CONNECTED',
                     headers => {
-                        "session-id"    => sprintf("%s",$self->session_id),
+                        "session"       => sprintf("%s",$self->session_id),
                         "version"       => $DEFAULT_PROTOCOL,
                         "server"        => ref($self->parent_broker),
                     },
