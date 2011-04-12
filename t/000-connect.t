@@ -36,7 +36,7 @@ my $client;
     $done = AE::cv;
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '12.34' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $done->(0) } );
-    $client->reg_cb( io_error => sub { diag $_[1]; $done->(0); } );
+    $client->reg_cb( io_error => sub { $done->(1); } ); # expects disconnect
     $client->reg_cb( ERROR => sub { $done->(1); });
     ok $done->recv;
     undef $client; # disconnect
@@ -58,6 +58,7 @@ my $client;
     ok $done->recv;
     undef $client; # disconnect
 }
+
 
 ok 1;
 

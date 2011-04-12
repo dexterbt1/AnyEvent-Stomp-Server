@@ -128,7 +128,7 @@ sub disconnect {
     $self->handle( undef );
     $h->destroy;
     undef $h;
-    print STDERR "$reason\n" if ($reason);
+    #print STDERR "$reason\n" if ($reason);
     undef $self;
 }
 
