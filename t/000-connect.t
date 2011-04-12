@@ -24,7 +24,7 @@ my $client;
     $client->reg_cb( io_error => sub { diag $_[1]; $done->send(0); } );
     $client->reg_cb( CONNECTED => sub {
         my ($c, $body, $headers) = @_;
-        ok exists $headers->{'session-id'};
+        ok exists $headers->{'session'};
         ok exists $headers->{'server'};
         is $headers->{'version'}, '1.0';
         $done->send(1);
@@ -52,7 +52,7 @@ my $client;
     $client->reg_cb( io_error => sub { diag $_[1]; $done->send(0); } );
     $client->reg_cb( CONNECTED => sub {
         my ($c, $body, $headers) = @_;
-        ok exists $headers->{'session-id'};
+        ok exists $headers->{'session'};
         ok exists $headers->{'server'};
         is $headers->{'version'}, '1.1';
         $done->send(1);
