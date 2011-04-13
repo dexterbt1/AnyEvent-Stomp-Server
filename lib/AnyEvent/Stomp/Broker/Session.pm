@@ -7,6 +7,8 @@ use Scalar::Util qw/refaddr/;
 use AnyEvent::Stomp::Broker::Session::Subscription;
 use AnyEvent::Stomp::Broker::Constants '-all';
 
+with 'AnyEvent::Stomp::Broker::Role::Session';
+
 our $DEBUG = 0;
 our $DEFAULT_PROTOCOL = '1.0';
 our %SERVER_PROTOCOLS = (
@@ -24,7 +26,6 @@ has 'handle'                => ( is => 'rw', isa => 'Any' );
 
 has 'is_connected'          => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
-has 'session_id'            => ( is => 'rw', isa => 'Any' );
 
 
 sub BUILD {
@@ -152,7 +153,8 @@ sub send_client_receipt {
 sub send_client_error {
     my ($self, $message, $original_frame) = @_;
     no warnings 'uninitialized';
-    my $f = Net::Stomp::Frame->new({ command => 'ERROR', headers => { 'content-type' => 'text/plain' }, body => $message."\n" });
+    ($DEBUG) && do { print STDERR "client_error: ".$message."\n"; };
+    my $f = Net::Stomp::Frame->new({ command => 'ERROR', headers => { 'message' => $message || '' }, body => '' });
     if ($original_frame && exists($original_frame->{headers}->{'receipt'})) { 
         $f->{headers}->{'receipt-id'} = $original_frame->{headers}->{'receipt'};
     }
@@ -257,7 +259,7 @@ sub handle_frame_subscribe {
         },
         sub {
             # failed subscription
-            my ($sub, $fail_reason) = @_;
+            my ($fail_reason, $sub) = @_;
             $self->send_client_error($fail_reason, $frame);
             $self->disconnect( $fail_reason );
         },

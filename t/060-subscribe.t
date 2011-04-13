@@ -13,6 +13,7 @@ my $PORT = 16163;
 
 my $backend = MockBackend->new;
 my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $backend ); 
+#$AnyEvent::Stomp::Broker::Session::DEBUG = 1;
 
 my $client;
 

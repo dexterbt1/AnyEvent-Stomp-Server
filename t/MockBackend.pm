@@ -1,7 +1,7 @@
 package MockBackend;
 use strict;
 use Moose;
-with 'AnyEvent::Stomp::Broker::Backend';
+with 'AnyEvent::Stomp::Broker::Role::Backend';
 
 has 'queue' => ( is => 'rw', isa => 'ArrayRef', default => sub { [ ] } );
 
@@ -16,7 +16,7 @@ sub send {
         $success_cb->();
     }
     else {
-        $fail_cb->('simulated fail');
+        $fail_cb->('backend send simulated fail');
     }
 }
 
@@ -26,7 +26,7 @@ sub subscribe {
         $success_cb->($sub);
     }
     else {
-        $fail_cb->($sub);
+        $fail_cb->('backend subscribe simulated fail', $sub);
     }
 }
 

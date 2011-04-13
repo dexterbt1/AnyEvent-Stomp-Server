@@ -10,9 +10,10 @@ my $builder = Module::Build->new(
     build_requires => {
         'Test::More'            => 0,
         'AnyEvent'              => 0,
-        'AnyEvent::STOMP'       => 0,
+        'AnyEvent::STOMP'       => 0.5,
         'Net::Stomp::Frame'     => 0,
         'Sub::Exporter'         => 0,
+        #'Object::Event'         => 1.23,
     },
     add_to_cleanup      => [ 'AnyEvent-Stomp-Broker-*' ],
     create_makefile_pl => 'traditional',

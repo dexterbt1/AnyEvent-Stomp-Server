@@ -1,4 +1,4 @@
-package AnyEvent::Stomp::Broker::Backend;
+package AnyEvent::Stomp::Broker::Role::Backend;
 use Moose::Role;
 
 requires 'send';                        # ($destination, $headers, $body_ref, $success_cb, $failure_cb)
@@ -7,7 +7,7 @@ requires 'send';                        # ($destination, $headers, $body_ref, $s
 
 requires 'subscribe';                   # ($subscription, $success_cb, $failure_cb)
     # success_cb( $subscription )
-    # failure_cb( $subscription, $reason )
+    # failure_cb( $reason, $subscription )
 
 1;
 
