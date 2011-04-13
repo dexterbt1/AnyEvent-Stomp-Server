@@ -3,5 +3,7 @@
 work.vim
 Build
 _build
+blib
+cover_db
 MYMETA.yml
 MANIFEST.SKIP
