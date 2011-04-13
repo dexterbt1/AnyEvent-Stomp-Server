@@ -3,6 +3,7 @@ use Test::More qw/no_plan/;
 
 BEGIN {
     use_ok 'AnyEvent::Stomp::Broker';
+    use_ok 'AnyEvent::Stomp::Broker::Constants', '-all';
     use_ok 'AnyEvent::STOMP';
     use_ok 'YAML';
     require 't/MockBackend.pm';
@@ -15,14 +16,15 @@ my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $bac
 
 my $client;
 
-# subscribe
 {
+    diag "1.0 subscribe";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
-    $backend->subscribe_cb(sub {
-        my (undef, undef, $frame) = @_;
-        is $frame->{headers}->{'destination'}, 'foo';
+    $backend->subscribe_obs(sub {
+        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        is $sub->destination, 'foo';
+        is $sub->ack, STOMP_ACK_AUTO,
         $subscribed->send(1);
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo', undef );
@@ -34,20 +36,18 @@ my $client;
     undef $client; # disconnect
 }
 
-# subscribe w/ receipt + headers
 {
+    diag "1.0 subscribe w/ receipt + headers";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
-    $backend->subscribe_cb(sub {
-        my (undef, $sess, $frame) = @_;
-        is $frame->{headers}->{'destination'}, 'foo';
-        is $frame->{headers}->{'receipt'}, '123abc';
-        is $frame->{headers}->{'ack'}, 'client';
-        is $frame->{headers}->{'prefetch-size'}, 1;
-        $sess->send_client_receipt( $frame->{headers}->{'receipt'} ); # mocked receipt
+    $backend->subscribe_obs(sub {
+        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        is $sub->destination, 'foo_bar';
+        is $sub->id, 'foo_bar';
+        is $sub->ack, STOMP_ACK_CLIENT, 'ack=client';
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo', undef, undef, { 'prefetch-size' => 1, 'receipt' => '123abc', 'ack' => 'client' } );
+    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo_bar', undef, undef, { 'prefetch-size' => 1, 'receipt' => '123abc', 'ack' => 'client' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -56,18 +56,18 @@ my $client;
         is $headers->{'receipt-id'}, '123abc';
         $subscribed->send(1); 
     });
-    ok $connected->recv;
+    ok $connected->recv, 'connected';
     ok $subscribed->recv;
     undef $client; # disconnect
 }
 
-# v1.0 subscribe w/out destination
 {
+    diag "v1.0 subscribe w/out destination";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     my $backend_subscribe_not_called = 1;
-    $backend->subscribe_cb(sub {
+    $backend->subscribe_obs(sub {
         $backend_subscribe_not_called = 0;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, undef );
@@ -89,13 +89,13 @@ my $client;
     undef $client; # disconnect
 }
 
-# v1.1 subscribe w/out id
 {
+    diag "v1.1 subscribe w/out id";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     my $backend_subscribe_not_called = 1;
-    $backend->subscribe_cb(sub {
+    $backend->subscribe_obs(sub {
         $backend_subscribe_not_called = 0;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
@@ -115,6 +115,38 @@ my $client;
     ok not($subscribed->recv);
     ok $backend_subscribe_not_called;
     undef $client; # disconnect
+}
+
+
+{
+    diag "v1.1 subscribe ok w/ receipt";
+    my $connected = AE::cv;
+    my $subscribe_receipt = AE::cv;
+    $backend->subscribe_obs(sub {
+        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        is $sub->destination, 'foo';
+        is $sub->id, '1';
+        is $sub->ack, STOMP_ACK_INDIVIDUAL;
+    });
+    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
+    $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribe_receipt->send(0); } );
+    $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribe_receipt->send(0); } );
+    $client->reg_cb( ERROR => sub { diag Dump($_[1]); $connected->send(0); $subscribe_receipt->send(0); } );
+    $client->reg_cb( CONNECTED => sub { 
+        $connected->send(1); 
+        $client->send_frame( 
+            SUBSCRIBE => '', 
+            { 'destination' => 'foo', 'receipt' => '1235', id => '1', ack => 'client-individual' },
+        );
+    });
+    $client->reg_cb( RECEIPT => sub {
+        my (undef, $body, $headers) = @_;
+        is $headers->{'receipt-id'}, '1235';
+        $subscribe_receipt->send(1);
+    });
+    ok $connected->recv;
+    ok $subscribe_receipt->recv;
+    undef $client;
 }
 
 

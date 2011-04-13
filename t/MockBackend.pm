@@ -1,16 +1,26 @@
 package MockBackend;
+use strict;
 use Moose;
 with 'AnyEvent::Stomp::Broker::Backend';
 
 has 'queue' => ( is => 'rw', isa => 'ArrayRef', default => sub { [ ] } );
 
-# client initiated frames
-has 'send_cb'           => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
-has 'subscribe_cb'      => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
+# observer callbacks
+has 'send_obs'          => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
+has 'subscribe_obs'     => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 
 
-sub send { return $_[0]->send_cb->(@_); }
-sub subscribe { return $_[0]->subscribe_cb->(@_); }
+sub send { 
+    $_[0]->send_obs->(@_); 
+}
+
+sub subscribe { 
+    my ($self, $sub, $success_cb, $fail_cb) = @_;
+    $self->subscribe_obs->(@_); 
+    if ($success_cb) {
+        $success_cb->($sub);
+    }
+}
 
 sub mock_enqueue {
     my ($self, $mock_message) = @_;

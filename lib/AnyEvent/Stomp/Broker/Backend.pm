@@ -1,8 +1,8 @@
 package AnyEvent::Stomp::Broker::Backend;
 use Moose::Role;
 
-requires 'send';                        # ($frame)
-requires 'subscribe';                   # ($frame, $subscription_id)
+requires 'send';                        # ($session, $send_success_cb)
+requires 'subscribe';                   # ($subscription, $success_cb, $failure_cb)
 
 1;
 

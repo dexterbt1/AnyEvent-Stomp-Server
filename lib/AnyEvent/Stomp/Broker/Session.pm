@@ -4,6 +4,8 @@ use Class::Load ':all';
 use Moose;
 use YAML;
 use Scalar::Util qw/refaddr/;
+use AnyEvent::Stomp::Broker::Session::Subscription;
+use AnyEvent::Stomp::Broker::Constants '-all';
 
 our $DEBUG = 0;
 our $DEFAULT_PROTOCOL = '1.0';
@@ -110,24 +112,7 @@ sub read_frame {
                 $self->parent_broker->backend->send($self, $frame);
             }
             elsif ($frame->{command} eq 'SUBSCRIBE') {
-                # validate subscribe frame
-                (exists $frame->{headers}->{'destination'})
-                    or do {
-                        $self->send_client_error( 'SUBSCRIBE header "destination" required', $frame);
-                        return;
-                    };
-                my $subscription_id = $frame->{headers}->{'destination'};
-                if ($self->protocol_version eq '1.1') {
-                    # Stomp 1.1 checks
-                    (exists $frame->{headers}->{'id'})
-                        or do {
-                            $self->send_client_error( 'SUBSCRIBE header "id" required', $frame);
-                            return;
-                        };
-                    $subscription_id = $frame->{headers}->{'id'};
-                }
-                # TODO: policy for repeat subscription_id
-                $self->parent_broker->backend->subscribe($self, $frame, $subscription_id);
+                $self->handle_frame_subscribe( $frame );
             }
             else {
                 # unexpected frame
@@ -157,8 +142,10 @@ sub send_client_frame {
 
 
 sub send_client_receipt {
-    my ($self, $receipt_id) = @_;
-    $self->send_client_frame( Net::Stomp::Frame->new({ command => 'RECEIPT', headers => { 'receipt-id' => $receipt_id }, body => '' }) );
+    my ($self, $receipt_id, $opt_headers) = @_;
+    my $headers = (defined $opt_headers) ? $opt_headers : { };
+    $headers->{'receipt-id'} = $receipt_id;
+    $self->send_client_frame( Net::Stomp::Frame->new( { command => 'RECEIPT', headers => $headers, body => '' } ) );
 }
 
 
@@ -171,6 +158,82 @@ sub send_client_error {
     $f->{headers}->{bytes_message} = 1; # FIXME: hardcode feature from Net::Stomp
     $self->send_client_frame( $f );
 }
+
+
+
+# -----------------
+
+sub handle_frame_subscribe {
+    my ($self, $frame) = @_;
+    # validate subscribe frame
+    # ------------------------
+    # 1.0 requires 'destination'
+    if (not exists $frame->{headers}->{'destination'}) {
+        $self->send_client_error( 'SUBSCRIBE header "destination" required', $frame);
+        return;
+    }
+    my $destination = $frame->{headers}->{'destination'};
+    my $subscription_id = $destination; # use the destination for 1.0 clients
+    if ($self->protocol_version eq '1.1') {
+        # 1.1 requires 'id'
+        if (not exists $frame->{headers}->{'id'}) {
+            $self->send_client_error( 'SUBSCRIBE header "id" required', $frame);
+            return;
+        }
+        $subscription_id = $frame->{headers}->{'id'};
+    }
+    my %opts = (
+        ack         => STOMP_ACK_AUTO(),
+    );
+    if (exists $frame->{headers}->{'ack'}) {
+        my $ack = $frame->{headers}->{'ack'} || '';
+        if ($ack eq 'auto') {
+            $opts{ack} = STOMP_ACK_AUTO();
+        }
+        elsif ($ack eq 'client') {
+            $opts{ack} = STOMP_ACK_CLIENT();
+        }
+        elsif ($ack eq 'client-individual') {
+            $opts{ack} = STOMP_ACK_INDIVIDUAL();
+        }
+        else {
+            $self->send_client_error( 
+                'Supported SUBSCRIBE header "ack" are: '.join(',', 'auto', 'client', 'client-individual'), 
+                $frame,
+            );
+            return;
+        }
+    }
+    my $subscription = AnyEvent::Stomp::Broker::Session::Subscription->new(
+        id          => $subscription_id,
+        session     => $self,
+        destination => $destination,
+        %opts,
+    );
+    # TODO: policy for repeat subscription_id
+    $self->parent_broker->backend->subscribe(
+        $subscription,
+        sub {
+            # successful subscription
+            my ($sub) = @_;
+            if (exists $frame->headers->{'receipt'}) {
+                my $sub_receipt_headers = { };
+                if ($sub->session->protocol_version eq '1.1') {
+                    $sub_receipt_headers->{'id'} = $sub->id;
+                }
+                $self->send_client_receipt($frame->headers->{'receipt'}, $sub_receipt_headers);
+            }
+        },
+        sub {
+            # failed subscription
+            my ($sub, $fail_reason) = @_;
+            $self->send_client_error($fail_reason, $frame);
+            $self->disconnect( $fail_reason );
+        },
+    );
+}
+
+
 
 1;
 

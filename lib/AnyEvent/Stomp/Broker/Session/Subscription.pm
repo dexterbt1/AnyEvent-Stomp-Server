@@ -1,0 +1,14 @@
+package AnyEvent::Stomp::Broker::Session::Subscription;
+use strict;
+use Moose;
+use AnyEvent::Stomp::Broker::Constants '-all';
+
+has 'id'            => (is => 'rw', isa => 'Str', required => 1);
+has 'session'       => (is => 'rw', isa => 'AnyEvent::Stomp::Broker::Session', weak_ref => 1, required => 1);
+has 'destination'   => (is => 'rw', isa => 'Str', required => 1);
+has 'ack'           => (is => 'rw', isa => 'Int', lazy => 1, default => sub { STOMP_ACK_AUTO });
+
+
+1;
+
+__END__
