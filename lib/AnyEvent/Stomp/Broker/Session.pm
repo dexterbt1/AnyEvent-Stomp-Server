@@ -5,6 +5,7 @@ use Moose;
 use YAML;
 use Scalar::Util qw/refaddr/;
 
+our $DEBUG = 0;
 our $DEFAULT_PROTOCOL = '1.0';
 our %SERVER_PROTOCOLS = (
     '1.0'   => 1,
@@ -31,9 +32,15 @@ sub BUILD {
     binmode $self->socket;
     $ch = $self->handle_class->new(
         fh          => $self->socket,
-        on_error    => sub { $self->disconnect($_[2]); },
-        on_eof      => sub { $self->disconnect("Client socket disconnected: ".$self); },
-        on_read     => sub { $self->read_frame( @_ ) },
+        on_error    => sub { 
+            $self->disconnect($_[2]); 
+        },
+        on_eof      => sub { 
+            $self->disconnect("Client socket disconnected"); 
+        },
+        on_read     => sub { 
+            $self->read_frame(@_); 
+        },
     );
     $self->handle($ch);
     $self->session_id( refaddr($self) );
@@ -44,16 +51,17 @@ sub read_frame {
     my ($self, $ch) = @_;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
-        print STDERR Dump($frame);
+        ($DEBUG) && do { print STDERR "Broker received: ".Dump($frame); };
 
         if (not $self->is_connected) {
             # client did not issue a CONNECT yet
             if ($frame->{command} eq 'CONNECT') {
+                $self->protocol_version( $DEFAULT_PROTOCOL );
                 my $response_frame = Net::Stomp::Frame->new({
                     command => 'CONNECTED',
                     headers => {
                         "session"       => sprintf("%s",$self->session_id),
-                        "version"       => $DEFAULT_PROTOCOL,
+                        "version"       => $self->protocol_version,
                         "server"        => ref($self->parent_broker),
                     },
                     body => '',
@@ -64,9 +72,8 @@ sub read_frame {
 
                 # protocol negotiation: choose the highest version supported by both server and client
                 # ----------------
-                my $proto_version = '';
-
                 if (exists $frame->{headers}->{'accept-version'}) {
+                    my $proto_version = '';
                     my @client_versions = split /\s*,\s*/, $frame->{headers}->{'accept-version'};
                     my %client_supported = map { $_ => 1 } @client_versions;
                     foreach my $sv (sort keys %SERVER_PROTOCOLS) {
@@ -80,11 +87,11 @@ sub read_frame {
                         return;
                     }
                     $response_frame->{headers}->{'version'} = $proto_version;
+                    $self->protocol_version( $proto_version );
                 }
 
                 $self->send_client_frame( $response_frame );
                 $self->is_connected( 1 );
-                $self->protocol_version( $proto_version );
                 return 1;
             }
             else {
@@ -95,6 +102,7 @@ sub read_frame {
         else {
             # already connected
             # -----------------
+            no warnings 'uninitialized';
             if ($frame->{command} eq 'DISCONNECT') {
                 $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
             }
@@ -136,7 +144,7 @@ sub disconnect {
     $self->handle( undef );
     $h->destroy;
     undef $h;
-    #print STDERR "$reason\n" if ($reason);
+    #print STDERR "disconnect: $reason\n" if ($reason);
     undef $self;
 }
 
@@ -144,6 +152,7 @@ sub disconnect {
 sub send_client_frame {
     my ($self, $frame) = @_;
     $self->handle->push_write( $frame->as_string );
+    ($DEBUG) && do { print STDERR "Broker sent: ".Dump($frame); };
 }
 
 
