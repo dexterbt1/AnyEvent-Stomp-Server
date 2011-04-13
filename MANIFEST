@@ -6,7 +6,7 @@ lib/AnyEvent/Stomp/Broker/Frame.pm
 lib/AnyEvent/Stomp/Broker/Session.pm
 lib/AnyEvent/Stomp/Broker/Session/Subscription.pm
 MANIFEST			This list of files
-README
+README.md
 t/000-connect.t
 t/050-send.t
 t/060-subscribe.t
