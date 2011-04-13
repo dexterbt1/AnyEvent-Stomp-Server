@@ -1,2 +1,6 @@
 *.sw[po]
+*.bak
 work.vim
+Build
+_build
+MYMETA.yml
