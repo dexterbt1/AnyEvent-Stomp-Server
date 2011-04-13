@@ -20,7 +20,7 @@ my $client;
     # connect
     my $connected = AE::cv;
     my $sent = AE::cv;
-    $backend->send_cb( sub {
+    $backend->send_obs( sub {
         my (undef,undef,$frame) = @_;
         is $frame->{command}, 'SEND';
         is $frame->{headers}->{'destination'}, 'foo';
