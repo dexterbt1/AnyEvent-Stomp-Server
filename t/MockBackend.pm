@@ -11,7 +11,13 @@ has 'subscribe_obs'     => ( is => 'rw', isa => 'CodeRef', lazy => 1, default =>
 
 
 sub send { 
-    $_[0]->send_obs->(@_); 
+    my ($self, $destination, $headers, $body_ref, $success_cb, $fail_cb) = @_;
+    if ($self->send_obs->(@_)) {
+        $success_cb->();
+    }
+    else {
+        $fail_cb->('simulated fail');
+    }
 }
 
 sub subscribe { 

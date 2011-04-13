@@ -109,7 +109,7 @@ sub read_frame {
                 $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
             }
             elsif ($frame->{command} eq 'SEND') {
-                $self->parent_broker->backend->send($self, $frame);
+                $self->handle_frame_send( $frame );
             }
             elsif ($frame->{command} eq 'SUBSCRIBE') {
                 $self->handle_frame_subscribe( $frame );
@@ -163,6 +163,36 @@ sub send_client_error {
 
 
 # -----------------
+
+sub handle_frame_send {
+    my ($self, $frame) = @_;
+    # 1.0 requires destination
+    if (not exists $frame->{headers}->{'destination'}) {
+        $self->send_client_error( 'SEND header "destination" required', $frame );
+        return;
+    }
+    my $destination = delete $frame->{headers}->{'destination'};
+    my $has_receipt = exists $frame->{headers}->{'receipt'};
+    my $receipt_id  = delete $frame->{headers}->{'receipt'};
+    $self->parent_broker->backend->send(
+        $destination, 
+        $frame->{headers}, 
+        \$frame->{body},
+        sub {
+            # backend send success
+            if ($has_receipt) {
+                $self->send_client_receipt( $receipt_id );
+            }
+        },
+        sub {
+            # backend send fail
+            my ($fail_reason) = @_;
+            $self->send_client_error( $fail_reason, $frame );
+            $self->disconnect( $fail_reason );
+        },
+    );
+}
+
 
 sub handle_frame_subscribe {
     my ($self, $frame) = @_;
