@@ -17,7 +17,7 @@ my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $bac
 my $client;
 
 {
-    diag "1.0 subscribe";
+    pass "v1.0 subscribe";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
@@ -26,6 +26,7 @@ my $client;
         is $sub->destination, 'foo';
         is $sub->ack, STOMP_ACK_AUTO,
         $subscribed->send(1);
+        return 1;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo', undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
@@ -37,7 +38,24 @@ my $client;
 }
 
 {
-    diag "1.0 subscribe w/ receipt + headers";
+    pass "v1.0 backend subscribe failed";
+    # connect
+    my $io_error = AE::cv;
+    my $backend_subscribe_called = 0;
+    $backend->subscribe_obs(sub {
+        $backend_subscribe_called = 1;
+        return 0; # failed
+    });
+    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'devnull', undef );
+    $client->reg_cb( connect_error => sub { diag $_[1]; $io_error->send(0); } ); 
+    $client->reg_cb( io_error => sub { $io_error->send(1); } ); # expect disconnect
+    ok $io_error->recv;
+    ok $backend_subscribe_called;
+    undef $client; # disconnect
+}
+
+{
+    pass "v1.0 subscribe w/ receipt + headers";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
@@ -62,13 +80,14 @@ my $client;
 }
 
 {
-    diag "v1.0 subscribe w/out destination";
+    pass "v1.0 subscribe w/out destination";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     my $backend_subscribe_not_called = 1;
     $backend->subscribe_obs(sub {
         $backend_subscribe_not_called = 0;
+        return 1;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
@@ -90,13 +109,14 @@ my $client;
 }
 
 {
-    diag "v1.1 subscribe w/out id";
+    pass "v1.1 subscribe w/out id";
     # connect
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     my $backend_subscribe_not_called = 1;
     $backend->subscribe_obs(sub {
         $backend_subscribe_not_called = 0;
+        return 1;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
@@ -119,7 +139,7 @@ my $client;
 
 
 {
-    diag "v1.1 subscribe ok w/ receipt";
+    pass "v1.1 subscribe ok w/ receipt";
     my $connected = AE::cv;
     my $subscribe_receipt = AE::cv;
     $backend->subscribe_obs(sub {
@@ -127,6 +147,7 @@ my $client;
         is $sub->destination, 'foo';
         is $sub->id, '1';
         is $sub->ack, STOMP_ACK_INDIVIDUAL;
+        return 1;
     });
     $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribe_receipt->send(0); } );

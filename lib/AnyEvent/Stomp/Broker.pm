@@ -1,5 +1,8 @@
 package AnyEvent::Stomp::Broker;
 use strict;
+
+our $VERSION = '0.10';
+
 use Moose;
 use AnyEvent;
 use AnyEvent::Socket;
@@ -39,3 +42,9 @@ __PACKAGE__->meta->make_immutable;
 
 
 __END__
+
+=head1 NAME
+
+AnyEvent::Stomp::Broker - a server framework for building Stomp Messaging Brokers
+
+=cut

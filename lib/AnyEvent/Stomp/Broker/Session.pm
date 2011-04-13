@@ -151,6 +151,7 @@ sub send_client_receipt {
 
 sub send_client_error {
     my ($self, $message, $original_frame) = @_;
+    no warnings 'uninitialized';
     my $f = Net::Stomp::Frame->new({ command => 'ERROR', headers => { 'content-type' => 'text/plain' }, body => $message."\n" });
     if ($original_frame && exists($original_frame->{headers}->{'receipt'})) { 
         $f->{headers}->{'receipt-id'} = $original_frame->{headers}->{'receipt'};

@@ -16,9 +16,11 @@ sub send {
 
 sub subscribe { 
     my ($self, $sub, $success_cb, $fail_cb) = @_;
-    $self->subscribe_obs->(@_); 
-    if ($success_cb) {
+    if ($self->subscribe_obs->(@_)) {
         $success_cb->($sub);
+    }
+    else {
+        $fail_cb->($sub);
     }
 }
 
