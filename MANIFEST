@@ -3,6 +3,8 @@ lib/AnyEvent/Stomp/Broker.pm
 lib/AnyEvent/Stomp/Broker/Backend.pm
 lib/AnyEvent/Stomp/Broker/Constants.pm
 lib/AnyEvent/Stomp/Broker/Frame.pm
+lib/AnyEvent/Stomp/Broker/Role/Backend.pm
+lib/AnyEvent/Stomp/Broker/Role/Session.pm
 lib/AnyEvent/Stomp/Broker/Session.pm
 lib/AnyEvent/Stomp/Broker/Session/Subscription.pm
 MANIFEST			This list of files

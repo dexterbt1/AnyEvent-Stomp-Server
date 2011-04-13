@@ -6,4 +6,3 @@ _build
 blib
 cover_db
 MYMETA.yml
-MANIFEST.SKIP
