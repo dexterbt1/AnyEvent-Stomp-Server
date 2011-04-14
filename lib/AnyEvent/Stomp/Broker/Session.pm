@@ -50,11 +50,18 @@ sub BUILD {
 }
 
 
+sub DEMOLISH {
+    my ($self) = @_;
+    ($DEBUG) && print STDERR __PACKAGE__."->DEMOLISH() called ...\n";
+    $self->parent_broker->backend->on_session_disconnect($self);
+}
+
+
 sub read_frame {
     my ($self, $ch) = @_;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
-        ($DEBUG) && do { print STDERR "Broker received: ".Dump($frame); };
+        ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
 
         if (not $self->is_connected) {
             # client did not issue a CONNECT yet
@@ -137,7 +144,7 @@ sub disconnect {
 sub send_client_frame {
     my ($self, $frame) = @_;
     $self->handle->push_write( $frame->as_string );
-    ($DEBUG) && do { print STDERR "Broker sent: ".Dump($frame); };
+    ($DEBUG) && do { print STDERR "Session sent: ".Dump($frame); };
 }
 
 
