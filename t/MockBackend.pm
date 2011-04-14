@@ -35,6 +35,9 @@ sub mock_enqueue {
     push @{$self->queue}, $mock_message;
 }
 
+
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__

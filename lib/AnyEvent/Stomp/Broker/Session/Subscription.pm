@@ -8,6 +8,7 @@ has 'session'       => (is => 'rw', does => 'AnyEvent::Stomp::Broker::Role::Sess
 has 'destination'   => (is => 'rw', isa => 'Str', required => 1);
 has 'ack'           => (is => 'rw', isa => 'Int', lazy => 1, default => sub { STOMP_ACK_AUTO });
 
+__PACKAGE__->meta->make_immutable;
 
 1;
 

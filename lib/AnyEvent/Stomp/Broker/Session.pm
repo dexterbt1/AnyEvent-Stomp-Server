@@ -1,8 +1,8 @@
 package AnyEvent::Stomp::Broker::Session;
 use strict;
-use Class::Load ':all';
 use Moose;
 use YAML;
+use Class::Load ':all';
 use Scalar::Util qw/refaddr/;
 use AnyEvent::Stomp::Broker::Session::Subscription;
 use AnyEvent::Stomp::Broker::Constants '-all';
@@ -266,6 +266,8 @@ sub handle_frame_subscribe {
     );
 }
 
+
+__PACKAGE__->meta->make_immutable;
 
 
 1;
