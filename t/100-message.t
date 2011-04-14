@@ -71,11 +71,11 @@ my $client;
     my $got_message = AE::cv;
     $io_error = $client->reg_cb( io_error => sub { $got_message->send(0); } );
     $client->reg_cb( MESSAGE => sub {
-        diag Dump(\@_);
+        diag Dump($_[1]);
         $got_message->send(1);
     });
     $backend->inject_message($QUEUE, \"hello world message", { });
-    #$got_message->recv;
+    $got_message->recv;
     undef $client; # disconnect
     
     

@@ -27,6 +27,9 @@ has 'handle'                => ( is => 'rw', isa => 'Any' );
 has 'is_connected'          => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
 
+has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
+has 'pending_messages_order'    => ( is => 'rw', isa => 'ArrayRef', lazy => 1, default => sub { [ ] } );
+
 
 sub BUILD {
     my ($self) = @_;
@@ -46,7 +49,7 @@ sub BUILD {
         },
     );
     $self->handle($ch);
-    $self->session_id( refaddr($self) );
+    $self->session_id( 'sessid-'.refaddr($self) );
 }
 
 
@@ -165,6 +168,20 @@ sub send_client_error {
         $f->{headers}->{'receipt-id'} = $original_frame->{headers}->{'receipt'};
     }
     $self->send_client_frame( $f );
+}
+
+
+sub send_client_message {
+    my ($self, $sub, $msg_id, $dest, $body_ref, $headers) = @_;
+    my $message_frame = AnyEvent::Stomp::Broker::Frame->new(
+        command => 'MESSAGE',
+        headers => $headers,
+        body_ref => $body_ref,
+    );
+    $message_frame->headers->{'message-id'} = $msg_id;
+    $message_frame->headers->{'destination'} = $dest;
+    $message_frame->headers->{'subscription'} = $sub->id;
+    $self->send_client_frame($message_frame);
 }
 
 
