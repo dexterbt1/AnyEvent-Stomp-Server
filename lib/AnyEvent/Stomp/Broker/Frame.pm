@@ -1,6 +1,29 @@
 package AnyEvent::Stomp::Broker::Frame;
 use strict;
-use Net::Stomp::Frame;
+use Moose;
+our $CRLF = "\n";
+
+has 'command' => (is => 'rw', isa => 'Str');
+has 'headers' => (is => 'rw', isa => 'HashRef', lazy => 1, default => sub { {} });
+has 'body_ref' => (is => 'rw', isa => 'Ref');
+
+sub body_as_string { 
+    my $b_ref = $_[0]->body_ref;
+    ref($b_ref) ? $$b_ref : '';
+}
+
+sub as_string {
+    my ($self) = @_;
+    my $body_str = $self->body_as_string;
+    my %h = %{$self->headers};
+    $h{'content-length'} = length($body_str);
+    join($CRLF,
+        $self->command || '',
+        _headers_as_string(\%h),
+        '',
+        $body_str."\000",
+    );
+}
 
 sub anyevent_read_type {
     my ($handle, $cb) = @_;
@@ -19,6 +42,8 @@ sub anyevent_read_type {
                         next;
                     }
                     my ($k, $v) = split /:/, $line, 2;
+                    _decode_header_value($k);
+                    _decode_header_value($v);
                     $headers->{$k} = $v;
                 }
                 my @args = ('regex' => qr/.*?\000\n*/s);
@@ -30,7 +55,7 @@ sub anyevent_read_type {
                     $body = $_[1];
                     $body =~ s/\000\n*$//;
                     # callback w/ the frame
-                    my $frame = Net::Stomp::Frame->new({ command => $command, headers => $headers, body => $body });
+                    my $frame = __PACKAGE__->new( command => $command, headers => $headers, body_ref => \$body );
                     $cb->( $_[0], $frame );
                 });
                 return 1;
@@ -39,6 +64,40 @@ sub anyevent_read_type {
         return 1;
     };
 }
+
+# functions
+
+sub _headers_as_string {
+    my $h = $_[0];
+    return join($CRLF, 
+        map { 
+            my $x = $_;
+            sprintf(
+                "%s:%s",
+                _encode_header_value($_),
+                _encode_header_value($h->{$x})
+            ) 
+        } sort keys %$h
+    );
+}
+
+sub _encode_header_value {
+    # mutator
+    $_[0] =~ s/\\/\\\\/g;
+    $_[0] =~ s/\n/\\n/g;
+    $_[0] =~ s/:/\\c/g;
+    $_[0];
+}
+
+sub _decode_header_value {
+    # mutator
+    $_[0] =~ s/\\n/\n/g;
+    $_[0] =~ s/\\c/:/g;
+    $_[0] =~ s/\\\\/\\/g;
+    $_[0];
+}
+
+__PACKAGE__->meta->make_immutable;
 
 1;
 

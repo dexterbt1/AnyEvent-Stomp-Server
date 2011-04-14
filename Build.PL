@@ -11,7 +11,6 @@ my $builder = Module::Build->new(
         'Test::More'            => 0,
     },
     requires => {
-        'Net::Stomp::Frame'     => 0,
         'Sub::Exporter'         => 0,
         'AnyEvent'              => 5.31,
         'AnyEvent::STOMP'       => 0.5,
