@@ -45,6 +45,7 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
 
 {
     # note, this is the 2nd test, the backend previously got a subscription to foo, but the client disconnected
+    # stateful backend test 
     pass "subscribe dest=foo, then simulate a MESSAGE";
     # connect
     my $QUEUE = 'foo';
@@ -76,9 +77,17 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
         is $body, "hello world message";
         $got_message->send(1);
     });
+    my $acked = AE::cv;
+    $backend->ack_obs(sub {
+        my ($be, $sess, $msg_id, $success_cb, $failure_cb) = @_;
+        ok defined($msg_id);
+        isa_ok $success_cb, 'CODE';
+        isa_ok $failure_cb, 'CODE';
+        $acked->send(1);
+    });
     $backend->inject_message($QUEUE, \"hello world message", { });
-    $got_message->recv;
-
+    ok $got_message->recv, 'client-got-message';
+    ok $acked->recv, 'backend-got-ack-from-session';
     $client->{handle}->destroy; # force disconnect
 }
 
@@ -86,7 +95,9 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
 
 {
     # note, this is the 2nd test, the backend previously got a subscription to foo, but the client disconnected
-    pass "subscribe dest=foo, ack=client, then simulate a MESSAGE";
+    pass "v1.0 subscribe dest=foo, ack=client, then simulate a MESSAGE";
+    my $hello2_id;
+    my $hello2_sub;
     # connect
     my $QUEUE = 'foo';
     my $connected = AE::cv;
@@ -97,6 +108,7 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
         is $sub->id, $QUEUE;
         is $sub->ack, STOMP_ACK_CLIENT;
         $subscribed->send(1);
+        $hello2_sub = $sub;
         return 1;
     });
     my $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, $QUEUE, undef, { }, { 'ack' => 'client' } );
@@ -105,22 +117,53 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
     ok $connected->recv;
     ok $subscribed->recv;
-    $client->unreg_cb( $io_error );
 
-    my $got_message = AE::cv;
-    $io_error = $client->reg_cb( io_error => sub { $got_message->send(0); } );
-    $client->reg_cb( MESSAGE => sub {
+    # simulate 2 prefetch
+    my $got_messages = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { $got_messages->send(0); } );
+    my $message_handler; 
+    $message_handler = $client->reg_cb( MESSAGE => sub {
         my (undef, $body, $headers) = @_;
         ok $headers->{'message-id'}, 'message-id';
         is $headers->{'destination'}, $QUEUE;
         is $headers->{'subscription'}, $QUEUE;
-        is $body, "hello world message";
-        $got_message->send(1);
+        is $body, "hello1";
+        $client->unreg_cb( $message_handler );
+        $message_handler = $client->reg_cb( MESSAGE => sub {
+            my (undef, $body, $headers) = @_;
+            ok $headers->{'message-id'}, 'message-id';
+            is $headers->{'destination'}, $QUEUE;
+            is $headers->{'subscription'}, $QUEUE;
+            is $headers->{'user'}, 'john';
+            is $body, "hello2";
+            $got_messages->send(1);
+            pass "got hello2";
+            $hello2_id = $headers->{'message-id'};
+            $client->unreg_cb( $message_handler );
+        });
+        pass "got hello1";
     });
-    $backend->inject_message($QUEUE, \"hello world message", { });
-    $got_message->recv;
-    undef $client; # disconnect
+    $backend->inject_message($QUEUE, \"hello1", { });
+    $backend->inject_message($QUEUE, \"hello2", { "user" => "john" });
+    ok $got_messages->recv;
+
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 2, '2-unacked';
+
+    # ack
+    my $error = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { diag $_[1]; $error->send(0); } );
+    my $error_guard = $client->reg_cb( ERROR => sub {
+        my ($undef, $body, $headers) = @_;
+        $error->send(1);
+    });
+    $client->send_frame('ACK', '', { }); 
+    ok $error->recv; # expected error frame due to missing message_id for v1.0 protocol
     
+    #is scalar(keys %{$hello2_sub->session->pending_messages}), 0, '0-unacked';
+
+    $client->{handle}->destroy; # force disconnect
 }
 
 

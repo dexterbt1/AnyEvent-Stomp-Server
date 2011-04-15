@@ -12,7 +12,9 @@ has 'queued_count'      => ( is => 'rw', isa => 'Int', default => sub { 0 } );
 has 'send_obs'          => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 has 'subscribe_obs'     => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 has 'disconnect_obs'    => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
+has 'ack_obs'           => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 
+# message management
 has 'subscriptions'             => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
     # { 
     #   dest => { 
@@ -101,7 +103,14 @@ sub dispatch_message {
 
 sub ack {
     my ($self, $session, $msg_id, $success_cb, $failure_cb) = @_;
-    # TODO implementation
+    if ($self->ack_obs->(@_)) {
+        my $t = delete $self->pending_messages->{$session->session_id}->{$msg_id};
+        $success_cb->($session, $msg_id);
+    }
+    else {
+        $failure_cb->("simulated ack failure", $session, $msg_id);
+    }
+    
 }
 
 

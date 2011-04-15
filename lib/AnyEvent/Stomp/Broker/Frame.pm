@@ -34,7 +34,7 @@ sub anyevent_read_type {
             sub { 
                 my $command;
                 my $raw_headers = $_[1];
-                $raw_headers =~ s[^(\015\012|\012)][]g;
+                $raw_headers =~ s[^(\015\012|\012)][]g; # strip extra newlines before the COMMAND
                 my $headers = { };
                 foreach my $line (split /\015\012|\012/, $raw_headers) {
                     if (not defined $command) {

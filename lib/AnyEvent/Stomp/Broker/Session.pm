@@ -124,6 +124,9 @@ sub read_frame {
             elsif ($frame->command eq 'SUBSCRIBE') {
                 $self->handle_frame_subscribe( $frame );
             }
+            elsif ($frame->command eq 'ACK') {
+                $self->handle_frame_ack( $frame );
+            }
             else {
                 # unexpected frame
                 $self->send_client_error( 'Unexpected frame', $frame );
@@ -182,11 +185,49 @@ sub send_client_message {
     $message_frame->headers->{'destination'} = $dest;
     $message_frame->headers->{'subscription'} = $sub->id;
     $self->send_client_frame($message_frame);
+    if ($sub->ack eq STOMP_ACK_AUTO) {
+        $self->parent_broker->backend->ack( 
+            $self, 
+            $msg_id,
+            sub { 
+                # successful ack
+                # nop
+            },
+            sub { 
+                # backend error during ack
+                my ($reason, $sess, $msg_id) = @_;
+                $self->send_client_error($reason);
+            },
+        );
+    } 
 }
 
 
 
 # -----------------
+
+
+sub handle_frame_ack {
+    my ($self, $frame) = @_;
+    my $msg_id;
+    if ($self->protocol_version eq '1.1') {
+        # TODO tests + impl    
+        # sub
+    }
+    elsif ($self->protocol_version eq '1.0') {
+        if (not exists $frame->headers->{'message-id'}) {
+            $self->send_client_error("ACK requires 'message-id' header", $frame);
+            return;
+        }
+        $msg_id = $frame->headers->{'message-id'};
+    }
+    else { # unsupported protocol
+        # TODO tests + impl    
+    }
+
+}
+
+
 
 sub handle_frame_send {
     my ($self, $frame) = @_;
