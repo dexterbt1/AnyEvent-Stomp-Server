@@ -28,7 +28,17 @@ has 'is_connected'          => ( is => 'rw', isa => 'Bool', lazy => 1, default =
 has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
 
 has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
+# {
+#   $msg_id => [ $sub, $body_ref, $headers ],
+#   ...
+# }
+
 has 'pending_messages_order'    => ( is => 'rw', isa => 'ArrayRef', lazy => 1, default => sub { [ ] } );
+# [
+#   $msg_id_1, 
+#   $msg_id_2, 
+#   ... # in the order as they were received from the backend
+# ]
 
 
 sub BUILD {
@@ -185,7 +195,20 @@ sub send_client_message {
     $message_frame->headers->{'destination'} = $dest;
     $message_frame->headers->{'subscription'} = $sub->id;
     $self->send_client_frame($message_frame);
-    if ($sub->ack eq STOMP_ACK_AUTO) {
+
+    if ($sub->ack eq STOMP_ACK_CLIENT) {
+        # ack=client
+        # ----------
+        # mark message as pending
+        push @{$self->pending_messages_order}, $msg_id;
+        $self->pending_messages->{$msg_id} = [ $sub, $body_ref, $headers ];
+        # ...
+        # then wait for the client to send an ACK frame
+        # ...
+    }
+    elsif ($sub->ack eq STOMP_ACK_AUTO) {
+        # ack=auto
+        # --------
         $self->parent_broker->backend->ack( 
             $self, 
             $msg_id,
@@ -202,6 +225,23 @@ sub send_client_message {
     } 
 }
 
+
+sub ack_pending_message_cumulative {
+    my ($self, $msg_id) = @_;
+    my $idx;
+    my $i = 0;
+    foreach my $pm (@{$self->pending_messages_order}) {
+        if ($pm eq $msg_id) {
+            $idx = $i;
+            last;
+        }
+        $i++;
+    }
+    if (defined $idx) {
+        my @removed = splice @{$self->pending_messages_order}, 0, $idx+1;
+        map { delete $self->pending_messages->{$_} } @removed;
+    }
+}
 
 
 # -----------------
@@ -220,10 +260,35 @@ sub handle_frame_ack {
             return;
         }
         $msg_id = $frame->headers->{'message-id'};
+        
     }
     else { # unsupported protocol
         # TODO tests + impl    
+        confess "ASSERT unsupported protocol";
     }
+
+    # validate existence
+    if (not($msg_id) or not(exists $self->pending_messages->{$msg_id})) {
+        $self->send_client_error(sprintf("ACK error for non-existent message-id '%s'", $msg_id), $frame);
+        return;
+    }
+
+    $self->parent_broker->backend->ack(
+        $self, 
+        $msg_id,
+        sub { 
+            # successful ack
+            if (exists $frame->headers->{'receipt'}) {
+                $self->send_client_receipt( $frame->headers->{'receipt'} );
+            }
+            $self->ack_pending_message_cumulative( $msg_id );
+        },
+        sub { 
+            # backend error during ack
+            my ($reason, $sess, $msg_id) = @_;
+            $self->send_client_error($reason);
+        },
+    );
 
 }
 

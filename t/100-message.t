@@ -150,18 +150,56 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
 
     is scalar(keys %{$hello2_sub->session->pending_messages}), 2, '2-unacked';
 
-    # ack
+    # ack empty headers
     my $error = AE::cv;
     $client->unreg_cb( $io_error );
     $io_error = $client->reg_cb( io_error => sub { diag $_[1]; $error->send(0); } );
     my $error_guard = $client->reg_cb( ERROR => sub {
-        my ($undef, $body, $headers) = @_;
+        my (undef, $body, $headers) = @_;
+        like $headers->{'message'}, qr/message-id/;
         $error->send(1);
     });
     $client->send_frame('ACK', '', { }); 
     ok $error->recv; # expected error frame due to missing message_id for v1.0 protocol
+
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 2, '2-unacked';
+
+    # ack invalid msg_id
+    $error = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { diag $_[1]; $error->send(0); } );
+    $client->unreg_cb( $error_guard );
+    $error_guard = $client->reg_cb( ERROR => sub {
+        my (undef, $body, $headers) = @_;
+        like $headers->{'message'}, qr/message-id/;
+        $error->send(1);
+    });
+    $client->send_frame('ACK', '', { 'message-id' => 'this-is-an-invalid-msg-id-12345' }); 
+    ok $error->recv; # expected error frame due to missing message_id for v1.0 protocol
+
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 2, '2-unacked';
+
+    # ack OK w/ receipt
+    my $receiptd = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { diag $_[1]; $receiptd->send(0); } );
+    $client->unreg_cb( $error_guard );
+    my $receipt_guard = $client->reg_cb( RECEIPT => sub {
+        my (undef, $body, $headers) = @_;
+        is $headers->{'receipt-id'}, 'ack-ok';
+        $receiptd->send(1);
+    });
+    my $acked = 0;
+    $backend->ack_obs(sub {
+        my ($be, $sess, $msg_id, $success_cb, $failure_cb) = @_;
+        $acked = 1;
+        return 1;
+    });
+    $client->send_frame('ACK', '', { 'message-id' => $hello2_id, 'receipt' => 'ack-ok' });
+    ok $receiptd->recv; # got receipt
+    ok $acked, 'backend-ackd';
     
-    #is scalar(keys %{$hello2_sub->session->pending_messages}), 0, '0-unacked';
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 0, '0-unacked';
 
     $client->{handle}->destroy; # force disconnect
 }

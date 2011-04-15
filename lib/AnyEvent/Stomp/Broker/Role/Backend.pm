@@ -1,8 +1,8 @@
 package AnyEvent::Stomp::Broker::Role::Backend;
 use Moose::Role;
 
-# Session
-# -------
+# Client Triggered
+# -----------------
 requires 'send';                        # $be->send($destination, $headers, $body_ref, $success_cb, $failure_cb)
     # success_cb( )
     # failure_cb( $reason )
