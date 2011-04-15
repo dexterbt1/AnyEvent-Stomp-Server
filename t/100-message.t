@@ -13,7 +13,7 @@ my $PORT = 16163;
 
 my $backend = MockBackend->new;
 my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $backend ); 
-$AnyEvent::Stomp::Broker::Session::DEBUG = 1;
+$AnyEvent::Stomp::Broker::Session::DEBUG = 0;
 
 {
     pass "subscribe dest=foo then disconnect";
@@ -282,6 +282,125 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 1;
     ok $acked, 'backend-ackd';
     
     is scalar(keys %{$hello2_sub->session->pending_messages}), 1, '1-unacked';
+
+    $client->{handle}->destroy; # force disconnect
+
+}
+
+
+
+{
+    pass "v1.1 subscribe dest=foo, ack=client-individual";
+    my $hello1_id;
+    my $hello1_sub;
+    my $hello2_id;
+    my $hello2_sub;
+    # connect
+    my $QUEUE = 'foo';
+    my $MYSUB = 'mysub';
+    my $connected = AE::cv;
+    my $subscribed = AE::cv;
+    $backend->subscribe_obs(sub {
+        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        is $sub->destination, $QUEUE;
+        is $sub->id, $MYSUB;
+        is $sub->ack, STOMP_ACK_INDIVIDUAL;
+        $subscribed->send(1);
+        $hello2_sub = $sub;
+        return 1;
+    });
+    my $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, $QUEUE, undef, 
+        { 'accept-version' => '1.1' }, 
+        { 'ack' => 'client-individual', 'id' => $MYSUB }, 
+    );
+    $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
+    my $io_error = $client->reg_cb( io_error => sub { $connected->send(0); } );
+    $client->reg_cb( CONNECTED => sub { $connected->send(1); });
+    ok $connected->recv;
+    ok $subscribed->recv;
+
+    # simulate 2 prefetch
+    my $got_messages = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { $got_messages->send(0); } );
+    my $message_handler; 
+    $message_handler = $client->reg_cb( MESSAGE => sub {
+        my (undef, $body, $headers) = @_;
+        ok $headers->{'message-id'}, 'message-id';
+        is $headers->{'destination'}, $QUEUE;
+        is $headers->{'subscription'}, $MYSUB;
+        is $body, "hello1";
+        $client->unreg_cb( $message_handler );
+        $message_handler = $client->reg_cb( MESSAGE => sub {
+            my (undef, $body, $headers) = @_;
+            ok $headers->{'message-id'}, 'message-id';
+            is $headers->{'destination'}, $QUEUE;
+            is $headers->{'subscription'}, $MYSUB;
+            is $headers->{'user'}, 'john';
+            is $body, "hello2";
+            $got_messages->send(1);
+            pass "got hello2";
+            $hello2_id = $headers->{'message-id'};
+            $client->unreg_cb( $message_handler );
+        });
+        pass "got hello1";
+        $hello1_id = $headers->{'message-id'};
+    });
+    $backend->inject_message($QUEUE, \"hello1", { });
+    $backend->inject_message($QUEUE, \"hello2", { "user" => "john" });
+    ok $got_messages->recv;
+
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 2, '2-unacked';
+
+    # ack no subscription header (required in 1.1)
+    my $ack_no_sub = AE::cv;
+    my $errg;
+    $io_error = $client->reg_cb( io_error => sub { $ack_no_sub->send(0); });
+    $errg = $client->reg_cb( ERROR => sub {
+        my (undef, $body, $headers) = @_;
+        like $headers->{'message'}, qr/subscription/, 'no-subscription-header';
+        $ack_no_sub->send(1);
+        $client->unreg_cb( $errg );
+    });
+    $client->send_frame('ACK', '', { 'message-id' => $hello2_id, 'receipt' => 'ack-ok' });
+    ok $ack_no_sub->recv;
+    $client->unreg_cb( $io_error );
+
+    # ack invalid subscription
+    my $ack_invalid_sub = AE::cv;
+    my $errg;
+    $io_error = $client->reg_cb( io_error => sub { $ack_invalid_sub->send(0); });
+    $errg = $client->reg_cb( ERROR => sub {
+        my (undef, $body, $headers) = @_;
+        like $headers->{'message'}, qr/subscription/, 'no-subscription-header';
+        $ack_invalid_sub->send(1);
+        $client->unreg_cb( $errg );
+    });
+    $client->send_frame('ACK', '', { 'subscription' => '_error_non_existent_sub', 'message-id' => $hello2_id, 'receipt' => 'ack-ok' });
+    ok $ack_invalid_sub->recv;
+    $client->unreg_cb( $io_error );
+
+    # ack w/ receipt, just hello2, hello1 should still be unacked
+    my $receiptd = AE::cv;
+    $client->unreg_cb( $io_error );
+    $io_error = $client->reg_cb( io_error => sub { diag $_[1]; $receiptd->send(0); } );
+    my $acked = 0;
+    $backend->ack_obs(sub {
+        my ($be, $sess, $msg_id, $success_cb, $failure_cb) = @_;
+        $acked = 1;
+        return 1;
+    });
+    my $receipt_guard = $client->reg_cb( RECEIPT => sub {
+        my (undef, $body, $headers) = @_;
+        is $headers->{'receipt-id'}, 'ack-ok';
+        $receiptd->send(1);
+    });
+    $client->send_frame('ACK', '', { 'subscription' => $MYSUB, 'message-id' => $hello2_id, 'receipt' => 'ack-ok' });
+    ok $receiptd->recv; # got receipt
+    ok $acked, 'backend-ackd';
+    
+    is scalar(keys %{$hello2_sub->session->pending_messages}), 1, '1-unacked';
+
 
     $client->{handle}->destroy; # force disconnect
 

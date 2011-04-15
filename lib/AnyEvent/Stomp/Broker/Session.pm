@@ -264,23 +264,23 @@ sub ack_pending_message_individual {
 
 sub handle_frame_ack {
     my ($self, $frame) = @_;
-    my $msg_id;
-    if ($self->protocol_version eq '1.1') {
-        # TODO tests + impl    
-        # sub
+    # required message-id in 1.0,1.1
+    if (not exists $frame->headers->{'message-id'}) {
+        $self->send_client_error("ACK requires 'message-id' header", $frame);
+        return;
     }
-    elsif ($self->protocol_version eq '1.0') {
-        if (not exists $frame->headers->{'message-id'}) {
-            $self->send_client_error("ACK requires 'message-id' header", $frame);
+
+    my $msg_id;
+    my $cl_sub_id;
+    if ($self->protocol_version eq '1.1') {
+        if (not exists $frame->headers->{'subscription'}) {
+            $self->send_client_error("ACK requires 'subscription' header", $frame);
             return;
         }
-        $msg_id = $frame->headers->{'message-id'};
-        
+        $cl_sub_id = $frame->headers->{'subscription'};
     }
-    else { # unsupported protocol
-        # TODO tests + impl    
-        confess "ASSERT unsupported protocol";
-    }
+
+    $msg_id = $frame->headers->{'message-id'};
 
     # validate existence
     if (not($msg_id) or not(exists $self->pending_messages->{$msg_id})) {
@@ -289,6 +289,13 @@ sub handle_frame_ack {
     }
 
     my $sub = $self->pending_messages->{$msg_id}->[0];
+    # validate subscription
+    if (defined $cl_sub_id) {
+        if ($sub->id ne $cl_sub_id) {
+            $self->send_client_error(sprintf("ACK error for non-existent subscription '%s'", $cl_sub_id), $frame);
+            return;
+        }
+    }
 
     $self->parent_broker->backend->ack(
         $self, 
