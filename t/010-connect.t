@@ -27,7 +27,7 @@ my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $bac
         $done->send(1);
     });
     ok $done->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 # protocol negotiation unsupported
@@ -38,7 +38,7 @@ my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $bac
     $client->reg_cb( io_error => sub { $done->send(1); } ); # expects disconnect
     $client->reg_cb( ERROR => sub { $done->send(1); }); # expect error frame, if we ever get this
     ok $done->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 # protocol negotiation ok

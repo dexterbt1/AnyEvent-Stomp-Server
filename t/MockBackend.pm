@@ -14,8 +14,31 @@ has 'subscribe_obs'     => ( is => 'rw', isa => 'CodeRef', lazy => 1, default =>
 has 'disconnect_obs'    => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 
 has 'subscriptions'             => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
+    # { 
+    #   dest => { 
+    #       "$sub_obj" => $sub,
+    #       ... 
+    #   }, 
+    #   ... 
+    # }
+
 has 'session_subscriptions'     => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
+    # { 
+    #   sess_id => { 
+    #       "$sub_obj" => $sub,
+    #       ... 
+    #   }, 
+    #   ... 
+    # }
+
 has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
+    # { 
+    #   sess_id => { 
+    #       msg_id => [ $sub, $msg_id, $dest, $body_ref, $headers ], 
+    #       ... 
+    #   }, 
+    #   ... 
+    # }
 
 
 sub send { 
@@ -47,6 +70,7 @@ sub subscribe {
     }
 }
 
+# simulated
 sub inject_message {
     my ($self, $dest, $body_ref, $headers) = @_;
     my $msg_id = $data_uuid->create_str;
@@ -55,20 +79,29 @@ sub inject_message {
     $self->dispatch_message( $msg_id => $raw_message );
 }
 
-# simulated
 sub dispatch_message {
     my ($self, $msg_id, $raw_message) = @_;
-    # find suitable subscription, randomly
-    my $dest_subscriptions = $self->subscriptions->{$raw_message->[0]} || [ ];
+
+    my $dest_subscriptions = $self->subscriptions->{$raw_message->[0]} || { };
     my @dest_subscriptions_keys = keys %$dest_subscriptions;
+    return if (scalar @dest_subscriptions_keys <= 0);
+
+    # find suitable subscription, randomly
     my $rand_key = int(rand(scalar @dest_subscriptions_keys));
     my $sub = $dest_subscriptions->{$dest_subscriptions_keys[$rand_key]};
     return if (not defined $sub);
+
     # send MESSAGE frame
-    $self->pending_messages->{$sub->session->session_id}->{$msg_id} = [ $raw_message, $sub ];
+    $self->pending_messages->{$sub->session->session_id}->{$msg_id} = [ $sub, $msg_id, @$raw_message ];
     $sub->session->send_client_message( $sub, $msg_id, @$raw_message );
     # wait for ack, on a different event
     # TODO timeout
+}
+
+
+sub ack {
+    my ($self, $session, $msg_id, $success_cb, $failure_cb) = @_;
+    # TODO implementation
 }
 
 

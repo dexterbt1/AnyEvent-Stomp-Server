@@ -35,7 +35,7 @@ my $client;
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
     ok $connected->recv;
     ok $subscribed->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -52,7 +52,7 @@ my $client;
     $client->reg_cb( io_error => sub { $io_error->send(1); } ); # expect disconnect
     ok $io_error->recv;
     ok $backend_subscribe_called;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -77,7 +77,7 @@ my $client;
     });
     ok $connected->recv, 'connected';
     ok $subscribed->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -106,7 +106,7 @@ my $client;
     ok $connected->recv;
     ok not($subscribed->recv);
     ok $backend_subscribe_not_called;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -135,7 +135,7 @@ my $client;
     ok $connected->recv;
     ok not($subscribed->recv);
     ok $backend_subscribe_not_called;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 
@@ -168,7 +168,7 @@ my $client;
     });
     ok $connected->recv;
     ok $subscribe_receipt->recv;
-    undef $client;
+    $client->{handle}->destroy; # force disconnect
 }
 
 

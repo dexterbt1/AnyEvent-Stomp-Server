@@ -29,6 +29,7 @@ my $client;
     $client->reg_cb( ERROR => sub { $error->send(1); });
     $client->send_frame('SEND', '', { });
     ok $error;
+    $client->{handle}->destroy; # force disconnect
     
 }
 
@@ -54,7 +55,7 @@ my $client;
     # send and ensure backend gets the frame
     $client->send('hello world', 'foo');
     ok $sent->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -86,7 +87,7 @@ my $client;
     $client->send('hello world2', 'foo2', { 'receipt' => '1234', 'content-type' => 'text/plain' });
     ok $sent->recv;
     ok $receipt->recv;
-    undef $client; # disconnect
+    $client->{handle}->destroy; # force disconnect
 }
 
 {
@@ -104,7 +105,7 @@ my $client;
     $client->reg_cb( io_error => sub { $error->send(1); } ); # expected io_error
     $client->send('hello error', 'err');
     ok $error->recv;
-    undef $client;
+    $client->{handle}->destroy; # force disconnect
 }
 
 
