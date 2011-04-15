@@ -9,8 +9,10 @@ lib/AnyEvent/Stomp/Broker/Session/Subscription.pm
 MANIFEST			This list of files
 MANIFEST.SKIP
 README.md
-t/000-connect.t
+t/000-frame.t
+t/010-connect.t
 t/050-send.t
 t/060-subscribe.t
+t/100-message.t
 t/MockBackend.pm
 t/TestBroker.pm

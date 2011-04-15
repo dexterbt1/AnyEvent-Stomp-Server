@@ -9,12 +9,10 @@ my $builder = Module::Build->new(
     dist_version_from   => 'lib/AnyEvent/Stomp/Broker.pm',
     build_requires => {
         'Test::More'            => 0,
-    },
-    requires => {
+        'Object::Event'         => '<= 1.21',
         'Sub::Exporter'         => 0,
         'AnyEvent'              => 5.31,
         'AnyEvent::STOMP'       => 0.5,
-        'Object::Event'         => '<= 1.21',
     },
     add_to_cleanup      => [ 'AnyEvent-Stomp-Broker-*' ],
     create_makefile_pl => 'traditional',
