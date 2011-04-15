@@ -30,7 +30,7 @@ has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
 has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, default => sub { { } } );
 # {
 #   $msg_id => [ $sub, $body_ref, $headers ],
-#   ...
+#   ...  # not used when ack != auto
 # }
 
 has 'pending_messages_order'    => ( is => 'rw', isa => 'ArrayRef', lazy => 1, default => sub { [ ] } );
@@ -38,6 +38,7 @@ has 'pending_messages_order'    => ( is => 'rw', isa => 'ArrayRef', lazy => 1, d
 #   $msg_id_1, 
 #   $msg_id_2, 
 #   ... # in the order as they were received from the backend
+#       # not used when ack=client-individual
 # ]
 
 
@@ -196,7 +197,7 @@ sub send_client_message {
     $message_frame->headers->{'subscription'} = $sub->id;
     $self->send_client_frame($message_frame);
 
-    if ($sub->ack eq STOMP_ACK_CLIENT) {
+    if ($sub->ack == STOMP_ACK_CLIENT) {
         # ack=client
         # ----------
         # mark message as pending
@@ -206,7 +207,16 @@ sub send_client_message {
         # then wait for the client to send an ACK frame
         # ...
     }
-    elsif ($sub->ack eq STOMP_ACK_AUTO) {
+    elsif ($sub->ack == STOMP_ACK_INDIVIDUAL) {
+        # ack=client-individual
+        # ---------------------
+        # mark message as pending
+        $self->pending_messages->{$msg_id} = [ $sub, $body_ref, $headers ];
+        # ...
+        # then wait for the client to send an ACK frame
+        # ...
+    }
+    elsif ($sub->ack == STOMP_ACK_AUTO) {
         # ack=auto
         # --------
         $self->parent_broker->backend->ack( 
@@ -244,6 +254,11 @@ sub ack_pending_message_cumulative {
 }
 
 
+sub ack_pending_message_individual {
+    my ($self, $msg_id) = @_;
+    delete $self->pending_messages->{$msg_id};
+}
+
 # -----------------
 
 
@@ -273,15 +288,22 @@ sub handle_frame_ack {
         return;
     }
 
+    my $sub = $self->pending_messages->{$msg_id}->[0];
+
     $self->parent_broker->backend->ack(
         $self, 
         $msg_id,
         sub { 
             # successful ack
+            if ($sub->ack == STOMP_ACK_CLIENT) {
+                $self->ack_pending_message_cumulative( $msg_id );
+            }
+            elsif ($sub->ack == STOMP_ACK_INDIVIDUAL) {
+                $self->ack_pending_message_individual( $msg_id );
+            }
             if (exists $frame->headers->{'receipt'}) {
                 $self->send_client_receipt( $frame->headers->{'receipt'} );
             }
-            $self->ack_pending_message_cumulative( $msg_id );
         },
         sub { 
             # backend error during ack
