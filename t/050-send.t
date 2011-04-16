@@ -16,6 +16,8 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 0;
 
 my $client;
 
+$backend->connect_obs(sub { 1 });
+
 {
     pass "empty send";
     my $connected = AE::cv;

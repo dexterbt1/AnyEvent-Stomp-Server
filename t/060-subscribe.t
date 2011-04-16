@@ -17,6 +17,8 @@ my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $bac
 
 my $client;
 
+$backend->connect_obs(sub { 1 });
+
 {
     pass "v1.0 subscribe";
     # connect

@@ -1,8 +1,10 @@
 package AnyEvent::Stomp::Broker::Role::Backend;
 use Moose::Role;
 
-# Client Triggered
-# -----------------
+requires 'connect';                     # $be->connect($session, $success_cb, $failure_cb)
+    # success_cb( $session )
+    # failure_cb( $reason, $session )
+
 requires 'send';                        # $be->send($destination, $headers, $body_ref, $success_cb, $failure_cb)
     # success_cb( )
     # failure_cb( $reason )
@@ -15,11 +17,7 @@ requires 'ack';                         # $be->ack($session, $msg_id, $success_c
     # success_cb( $session, $msg_id )
     # failure_cb( $reason, $session, $msg_id )
 
-
-
-# Notifications
-# -------------
-requires 'on_session_disconnect';       # $be->session_disconnect($session)
+requires 'disconnect';                  # $be->disconnect($session)
 
 
 

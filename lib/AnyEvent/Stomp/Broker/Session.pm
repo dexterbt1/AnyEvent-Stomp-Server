@@ -24,6 +24,7 @@ has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
 has 'handle'                => ( is => 'rw', isa => 'Any' );
 
+has 'pending_connect'       => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 has 'is_connected'          => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 has 'protocol_version'      => ( is => 'rw', isa => 'Any' );
 
@@ -67,7 +68,9 @@ sub BUILD {
 sub DEMOLISH {
     my ($self) = @_;
     ($DEBUG) && print STDERR __PACKAGE__."->DEMOLISH() called ...\n";
-    $self->parent_broker->backend->on_session_disconnect($self);
+    if ($self->is_connected) {
+        $self->parent_broker->backend->disconnect($self);
+    }
 }
 
 
@@ -79,7 +82,7 @@ sub read_frame {
 
         if (not $self->is_connected) {
             # client did not issue a CONNECT yet
-            if ($frame->command eq 'CONNECT') {
+            if (($frame->command eq 'CONNECT') and not($self->pending_connect)) {
                 $self->protocol_version( $DEFAULT_PROTOCOL );
                 my $response_frame = AnyEvent::Stomp::Broker::Frame->new(
                     command => 'CONNECTED',
@@ -113,9 +116,21 @@ sub read_frame {
                     $self->protocol_version( $proto_version );
                 }
 
-                $self->send_client_frame( $response_frame );
-                $self->is_connected( 1 );
-                return 1;
+                $self->pending_connect(1);
+                $self->parent_broker->backend->connect(
+                    $self,
+                    sub {
+                        $self->send_client_frame( $response_frame );
+                        $self->is_connected( 1 );
+                        $self->pending_connect(0);
+                    },
+                    sub {
+                        my ($reason, $sess) = @_;
+                        $self->send_client_error( 'Unable to CONNECT, backend error: '.$reason, $frame );
+                        $self->disconnect($reason);
+                    },
+                );
+                return;
             }
             else {
                 $self->send_client_error( 'Not yet connected', $frame );

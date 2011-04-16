@@ -15,6 +15,8 @@ my $backend = MockBackend->new;
 my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $backend ); 
 $AnyEvent::Stomp::Broker::Session::DEBUG = 0;
 
+$backend->connect_obs(sub { 1 });
+
 {
     pass "subscribe dest=foo then disconnect";
     # connect
@@ -29,8 +31,8 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 0;
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     my $io_error = $client->reg_cb( io_error => sub { $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
-    ok $connected->recv;
-    ok $subscribed->recv;
+    ok $connected->recv, 'connected';
+    ok $subscribed->recv, 'subscribed';
     my $disconnected = AE::cv;
     $client->unreg_cb( $io_error );
     $backend->disconnect_obs(sub {
@@ -39,7 +41,7 @@ $AnyEvent::Stomp::Broker::Session::DEBUG = 0;
         return 1;
     });
     $client->{handle}->destroy; # force disconnect
-    ok $disconnected->recv;
+    ok $disconnected->recv, 'disconnected';
     
 }
 

@@ -9,9 +9,10 @@ has 'queue'             => ( is => 'rw', isa => 'HashRef[Str]', lazy => 1, defau
 has 'queued_count'      => ( is => 'rw', isa => 'Int', default => sub { 0 } );
 
 # observer callbacks
+has 'connect_obs'       => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
+has 'disconnect_obs'    => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 has 'send_obs'          => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 has 'subscribe_obs'     => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
-has 'disconnect_obs'    => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 has 'ack_obs'           => ( is => 'rw', isa => 'CodeRef', lazy => 1, default => sub { sub { } } );
 
 # message management
@@ -114,7 +115,17 @@ sub ack {
 }
 
 
-sub on_session_disconnect {
+sub connect {
+    my ($self, $session, $success_cb, $failure_cb) = @_;
+    if ($self->connect_obs->(@_)) {
+        $success_cb->($session);
+    }
+    else {
+        $failure_cb->("simulated connect failure", $session);
+    }
+}
+
+sub disconnect {
     my ($self, $sess) = @_;
     $self->disconnect_obs->(@_);
 
