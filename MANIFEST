@@ -14,5 +14,16 @@ t/010-connect.t
 t/050-send.t
 t/060-subscribe.t
 t/100-message.t
+t/ae-stomp/Changes
+t/ae-stomp/ignore.txt
+t/ae-stomp/lib/AnyEvent/STOMP.pm
+t/ae-stomp/Makefile.PL
+t/ae-stomp/MANIFEST
+t/ae-stomp/README
+t/ae-stomp/t/00-load.t
+t/ae-stomp/t/boilerplate.t
+t/ae-stomp/t/manifest.t
+t/ae-stomp/t/pod.t
 t/MockBackend.pm
+t/StompClient.pm
 t/TestBroker.pm
