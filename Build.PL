@@ -7,12 +7,11 @@ my $builder = Module::Build->new(
     license             => 'perl',
     dist_author         => 'Dexter Tad-y <dtady@cpan.org>',
     dist_version_from   => 'lib/AnyEvent/Stomp/Broker.pm',
-    build_requires => {
+    requires => {
         'Test::More'            => 0,
-        'Object::Event'         => '<= 1.21',
+        'Object::Event'         => '1.21',
         'Sub::Exporter'         => 0,
-        'AnyEvent'              => 5.31,
-        'AnyEvent::STOMP'       => 0.5,
+        'AnyEvent'              => '5.31',
     },
     add_to_cleanup      => [ 'AnyEvent-Stomp-Broker-*' ],
     create_makefile_pl => 'traditional',

@@ -1,12 +1,12 @@
 use strict;
-use Test::More tests => 37;
+use Test::More tests => 36;
 
 BEGIN {
     use_ok 'AnyEvent::Stomp::Broker';
     use_ok 'AnyEvent::Stomp::Broker::Constants', '-all';
-    use_ok 'AnyEvent::STOMP';
     use_ok 'YAML';
     require 't/MockBackend.pm';
+    require 't/StompClient.pm';
 }
 
 my $PORT = 16163;
@@ -29,7 +29,7 @@ my $client;
         $subscribed->send(1);
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo', undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, 'foo', undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -47,7 +47,7 @@ my $client;
         $backend_subscribe_called = 1;
         return 0; # failed
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'devnull', undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, 'devnull', undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $io_error->send(0); } ); 
     $client->reg_cb( io_error => sub { $io_error->send(1); } ); # expect disconnect
     ok $io_error->recv;
@@ -66,7 +66,7 @@ my $client;
         is $sub->id, 'foo_bar';
         is $sub->ack, STOMP_ACK_CLIENT, 'ack=client';
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, 'foo_bar', undef, undef, { 'prefetch-size' => 1, 'receipt' => '123abc', 'ack' => 'client' } );
+    $client = StompClient->connect( 'localhost', $PORT, 0, 'foo_bar', undef, undef, { 'prefetch-size' => 1, 'receipt' => '123abc', 'ack' => 'client' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -90,7 +90,7 @@ my $client;
         $backend_subscribe_not_called = 0;
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
     $client->reg_cb( CONNECTED => sub { 
@@ -119,7 +119,7 @@ my $client;
         $backend_subscribe_not_called = 0;
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribed->send(0); } );
     $client->reg_cb( CONNECTED => sub { 
@@ -150,7 +150,7 @@ my $client;
         is $sub->ack, STOMP_ACK_INDIVIDUAL;
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef, { 'accept-version' => '1.1' } );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0); $subscribe_receipt->send(0); } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); $subscribe_receipt->send(0); } );
     $client->reg_cb( ERROR => sub { diag Dump($_[1]); $connected->send(0); $subscribe_receipt->send(0); } );

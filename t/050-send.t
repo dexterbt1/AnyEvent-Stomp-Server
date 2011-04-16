@@ -1,11 +1,11 @@
 use strict;
-use Test::More tests => 27;
+use Test::More tests => 26;
 
 BEGIN {
     use_ok 'AnyEvent::Stomp::Broker';
-    use_ok 'AnyEvent::STOMP';
     use_ok 'YAML';
     require 't/MockBackend.pm';
+    require 't/StompClient.pm';
 }
 
 my $PORT = 16163;
@@ -19,7 +19,7 @@ my $client;
 {
     pass "empty send";
     my $connected = AE::cv;
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -48,7 +48,7 @@ my $client;
         $sent->send(1);
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -74,7 +74,7 @@ my $client;
         $sent->send(1);
         return 1;
     });
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });
@@ -96,7 +96,7 @@ my $client;
     # connect
     my $connected = AE::cv;
     $backend->send_obs( sub { 0 } ); # simulate backend failure
-    $client = AnyEvent::STOMP->connect( 'localhost', $PORT, 0, undef, undef );
+    $client = StompClient->connect( 'localhost', $PORT, 0, undef, undef );
     $client->reg_cb( connect_error => sub { diag $_[1]; $connected->send(0) } );
     my $ioerr = $client->reg_cb( io_error => sub { diag $_[1]; $connected->send(0); } );
     $client->reg_cb( CONNECTED => sub { $connected->send(1); });

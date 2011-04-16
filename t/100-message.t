@@ -1,12 +1,12 @@
 use strict;
-use Test::More qw/no_plan/;
+use Test::More tests => 102;
 
 BEGIN {
     use_ok 'AnyEvent::Stomp::Broker';
     use_ok 'AnyEvent::Stomp::Broker::Constants', '-all';
-    use_ok 'AnyEvent::STOMP';
     use_ok 'YAML';
     require 't/MockBackend.pm';
+    require 't/StompClient.pm';
 }
 
 my $PORT = 16163;
