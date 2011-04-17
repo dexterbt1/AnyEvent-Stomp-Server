@@ -45,7 +45,7 @@ has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 
 
 
 sub send { 
-    my ($self, $destination, $headers, $body_ref, $success_cb, $fail_cb) = @_;
+    my ($self, $sess, $destination, $headers, $body_ref, $success_cb, $fail_cb) = @_;
     if ($self->send_obs->(@_)) {
         $success_cb->();
     }
@@ -55,7 +55,7 @@ sub send {
 }
 
 sub subscribe { 
-    my ($self, $sub, $success_cb, $fail_cb) = @_;
+    my ($self, $sess, $sub, $success_cb, $fail_cb) = @_;
     if ($self->subscribe_obs->(@_)) {
         if (not exists $self->subscriptions->{$sub->destination}) {
             $self->subscriptions->{$sub->destination} = { }

@@ -5,11 +5,11 @@ requires 'connect';                     # $be->connect($session, $success_cb, $f
     # success_cb( $session )
     # failure_cb( $reason, $session )
 
-requires 'send';                        # $be->send($destination, $headers, $body_ref, $success_cb, $failure_cb)
+requires 'send';                        # $be->send($session, $destination, $headers, $body_ref, $success_cb, $failure_cb)
     # success_cb( )
     # failure_cb( $reason )
 
-requires 'subscribe';                   # $be->subscribe($subscription, $success_cb, $failure_cb)
+requires 'subscribe';                   # $be->subscribe($session, $subscription, $success_cb, $failure_cb)
     # success_cb( $subscription )
     # failure_cb( $reason, $subscription )
 

@@ -42,7 +42,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $sent = AE::cv;
     $backend->send_obs( sub {
-        my ($be,$dest,$headers,$bodyref,$success_cb,$fail_cb) = @_;
+        my ($be,$sess,$dest,$headers,$bodyref,$success_cb,$fail_cb) = @_;
         is $dest, 'foo';
         ok not(exists $headers->{'receipt'});
         ok not(exists $headers->{'destination'});
@@ -67,7 +67,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $sent = AE::cv;
     $backend->send_obs( sub {
-        my ($be,$dest,$headers,$bodyref,$success_cb,$fail_cb) = @_;
+        my ($be,$sess,$dest,$headers,$bodyref,$success_cb,$fail_cb) = @_;
         is $dest, 'foo2';
         ok not(exists $headers->{'receipt'});
         ok not(exists $headers->{'destination'});

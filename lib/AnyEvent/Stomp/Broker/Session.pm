@@ -349,6 +349,7 @@ sub handle_frame_send {
     my $has_receipt = exists $frame->headers->{'receipt'};
     my $receipt_id  = delete $frame->headers->{'receipt'};
     $self->parent_broker->backend->send(
+        $self,
         $destination, 
         $frame->headers, 
         $frame->body_ref,
@@ -417,6 +418,7 @@ sub handle_frame_subscribe {
     );
     # TODO: policy for repeat subscription_id
     $self->parent_broker->backend->subscribe(
+        $self,
         $subscription,
         sub {
             # successful subscription

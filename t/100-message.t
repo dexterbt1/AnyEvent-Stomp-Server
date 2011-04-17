@@ -54,7 +54,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     $backend->subscribe_obs(sub {
-        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        my ($be, $sess, $sub, $sub_success_cb, $sub_fail_cb) = @_;
         is $sub->destination, $QUEUE;
         is $sub->id, $QUEUE;
         is $sub->ack, STOMP_ACK_AUTO;
@@ -105,7 +105,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     $backend->subscribe_obs(sub {
-        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        my ($be, $sess, $sub, $sub_success_cb, $sub_fail_cb) = @_;
         is $sub->destination, $QUEUE;
         is $sub->id, $QUEUE;
         is $sub->ack, STOMP_ACK_CLIENT;
@@ -217,7 +217,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     $backend->subscribe_obs(sub {
-        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        my ($be, $sess, $sub, $sub_success_cb, $sub_fail_cb) = @_;
         is $sub->destination, $QUEUE;
         is $sub->id, $QUEUE;
         is $sub->ack, STOMP_ACK_INDIVIDUAL;
@@ -303,7 +303,7 @@ $backend->connect_obs(sub { 1 });
     my $connected = AE::cv;
     my $subscribed = AE::cv;
     $backend->subscribe_obs(sub {
-        my ($be, $sub, $sub_success_cb, $sub_fail_cb) = @_;
+        my ($be, $sess, $sub, $sub_success_cb, $sub_fail_cb) = @_;
         is $sub->destination, $QUEUE;
         is $sub->id, $MYSUB;
         is $sub->ack, STOMP_ACK_INDIVIDUAL;
