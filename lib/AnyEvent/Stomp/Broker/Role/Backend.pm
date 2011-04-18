@@ -6,8 +6,8 @@ requires 'connect';                     # $be->connect($session, $success_cb, $f
     # failure_cb( $reason, $session )
 
 requires 'send';                        # $be->send($session, $destination, $headers, $body_ref, $success_cb, $failure_cb)
-    # success_cb( )
-    # failure_cb( $reason )
+    # success_cb( [ $session, $destination, $headers, $body_ref ] )
+    # failure_cb( $reason, [ $session, $destination, $headers, $body_ref ] )
 
 requires 'subscribe';                   # $be->subscribe($session, $subscription, $success_cb, $failure_cb)
     # success_cb( $subscription )

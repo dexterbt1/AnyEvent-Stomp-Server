@@ -3,7 +3,7 @@ use strict;
 use Moose;
 use YAML;
 use Class::Load ':all';
-use Scalar::Util qw/refaddr/;
+use Scalar::Util qw/refaddr weaken/;
 use AnyEvent::Stomp::Broker::Session::Subscription;
 use AnyEvent::Stomp::Broker::Constants '-all';
 
@@ -18,7 +18,7 @@ our %SERVER_PROTOCOLS = (
 
 has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Broker', weak_ref => 1 );
 
-has 'socket'                => ( is => 'rw', isa => 'GlobRef', required => 1, );
+has 'socket'                => ( is => 'rw', isa => 'GlobRef', required => 1, weak_ref => 1 );
 has 'host'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
@@ -69,6 +69,7 @@ sub DEMOLISH {
     my ($self) = @_;
     ($DEBUG) && print STDERR __PACKAGE__."->DEMOLISH() called ...\n";
     if ($self->is_connected) {
+        weaken $self;
         $self->parent_broker->backend->disconnect($self);
     }
 }
@@ -76,6 +77,7 @@ sub DEMOLISH {
 
 sub read_frame {
     my ($self, $ch) = @_;
+    weaken $ch;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
         ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
@@ -117,6 +119,7 @@ sub read_frame {
                 }
 
                 $self->pending_connect(1);
+                weaken $self;
                 $self->parent_broker->backend->connect(
                     $self,
                     sub {
@@ -165,7 +168,6 @@ sub read_frame {
 sub disconnect {
     my ($self, $reason) = @_;
     my $h = $self->handle;
-    $self->handle( undef );
     $h->destroy;
     undef $h;
     #print STDERR "disconnect: $reason\n" if ($reason);
@@ -175,6 +177,7 @@ sub disconnect {
 
 sub send_client_frame {
     my ($self, $frame) = @_;
+    return if ($self->handle->destroyed);
     $self->handle->push_write( $frame->as_string );
     ($DEBUG) && do { print STDERR "Session sent: ".Dump($frame); };
 }
@@ -234,6 +237,7 @@ sub send_client_message {
     elsif ($sub->ack == STOMP_ACK_AUTO) {
         # ack=auto
         # --------
+        weaken $self;
         $self->parent_broker->backend->ack( 
             $self, 
             $msg_id,
@@ -312,6 +316,7 @@ sub handle_frame_ack {
         }
     }
 
+    weaken $self;
     $self->parent_broker->backend->ack(
         $self, 
         $msg_id,
@@ -348,6 +353,7 @@ sub handle_frame_send {
     my $destination = delete $frame->headers->{'destination'};
     my $has_receipt = exists $frame->headers->{'receipt'};
     my $receipt_id  = delete $frame->headers->{'receipt'};
+    weaken $self;
     $self->parent_broker->backend->send(
         $self,
         $destination, 
@@ -416,6 +422,7 @@ sub handle_frame_subscribe {
         destination => $destination,
         %opts,
     );
+    weaken $self;
     # TODO: policy for repeat subscription_id
     $self->parent_broker->backend->subscribe(
         $self,

@@ -27,9 +27,8 @@ sub as_string {
 
 sub anyevent_read_type {
     my ($handle, $cb) = @_;
-    
     return sub {
-        $handle->push_read( 
+        $_[0]->push_read( 
             regex => qr/.*?\015\012\015\012|\012\012/s, 
             sub { 
                 my $command;
