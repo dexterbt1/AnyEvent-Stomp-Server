@@ -7,6 +7,8 @@ use Scalar::Util qw/refaddr weaken/;
 use AnyEvent::Stomp::Broker::Session::Subscription;
 use AnyEvent::Stomp::Broker::Constants '-all';
 
+use Devel::Refcount qw( refcount );
+
 with 'AnyEvent::Stomp::Broker::Role::Session';
 
 our $DEBUG = 0;
@@ -18,7 +20,7 @@ our %SERVER_PROTOCOLS = (
 
 has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Broker', weak_ref => 1 );
 
-has 'socket'                => ( is => 'rw', isa => 'GlobRef', required => 1, weak_ref => 1 );
+has 'socket'                => ( is => 'rw', isa => 'GlobRef|Undef', required => 1, weak_ref => 1 );
 has 'host'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
@@ -47,9 +49,11 @@ sub BUILD {
     my ($self) = @_;
     load_class $self->handle_class;
     my $ch;
-    binmode $self->socket;
+    my $fh = $self->socket;
+    binmode $fh;
+    weaken $fh;
     $ch = $self->handle_class->new(
-        fh          => $self->socket,
+        fh          => $fh,
         on_error    => sub { 
             $self->disconnect($_[2]); 
         },
@@ -69,7 +73,6 @@ sub DEMOLISH {
     my ($self) = @_;
     ($DEBUG) && print STDERR __PACKAGE__."->DEMOLISH() called ...\n";
     if ($self->is_connected) {
-        weaken $self;
         $self->parent_broker->backend->disconnect($self);
     }
 }
@@ -77,7 +80,7 @@ sub DEMOLISH {
 
 sub read_frame {
     my ($self, $ch) = @_;
-    weaken $ch;
+    weaken $self;
     $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
         my $frame = $_[1];
         ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
@@ -119,7 +122,6 @@ sub read_frame {
                 }
 
                 $self->pending_connect(1);
-                weaken $self;
                 $self->parent_broker->backend->connect(
                     $self,
                     sub {
@@ -170,8 +172,12 @@ sub disconnect {
     my $h = $self->handle;
     $h->destroy;
     undef $h;
-    #print STDERR "disconnect: $reason\n" if ($reason);
+    my $s = $self->socket;
+    $self->socket( undef );
+    undef $s;
     undef $self;
+    ($DEBUG) && do { print STDERR "disconnect: $reason\n" if ($reason); };
+    #$self->parent_broker->backend->disconnect($self);
 }
 
 
@@ -205,6 +211,7 @@ sub send_client_error {
 
 sub send_client_message {
     my ($self, $sub, $msg_id, $dest, $body_ref, $headers) = @_;
+    weaken $self;
     my $message_frame = AnyEvent::Stomp::Broker::Frame->new(
         command => 'MESSAGE',
         headers => $headers,
@@ -237,7 +244,6 @@ sub send_client_message {
     elsif ($sub->ack == STOMP_ACK_AUTO) {
         # ack=auto
         # --------
-        weaken $self;
         $self->parent_broker->backend->ack( 
             $self, 
             $msg_id,
