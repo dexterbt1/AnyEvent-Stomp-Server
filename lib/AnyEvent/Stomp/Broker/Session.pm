@@ -7,7 +7,7 @@ use Scalar::Util qw/refaddr weaken/;
 use AnyEvent::Stomp::Broker::Session::Subscription;
 use AnyEvent::Stomp::Broker::Constants '-all';
 
-use Devel::Refcount qw( refcount );
+#use Devel::Refcount qw( refcount );
 
 with 'AnyEvent::Stomp::Broker::Role::Session';
 
@@ -23,6 +23,7 @@ has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Broker', w
 has 'socket'                => ( is => 'rw', isa => 'GlobRef|Undef', required => 1, weak_ref => 1 );
 has 'host'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
+has 'frame_class'           => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Stomp::Broker::Frame' );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
 has 'handle'                => ( is => 'rw', isa => 'Any' );
 
@@ -54,18 +55,17 @@ sub BUILD {
     weaken $fh;
     $ch = $self->handle_class->new(
         fh          => $fh,
+        autocork    => 0,
         on_error    => sub { 
             $self->disconnect($_[2]); 
         },
         on_eof      => sub { 
             $self->disconnect("Client socket disconnected"); 
         },
-        on_read     => sub { 
-            $self->read_frame(@_); 
-        },
     );
     $self->handle($ch);
     $self->session_id( 'sessid-'.refaddr($self) );
+    $ch->push_read( $self->frame_class, sub { $self->read_frame(@_); } );
 }
 
 
@@ -79,12 +79,11 @@ sub DEMOLISH {
 
 
 sub read_frame {
-    my ($self, $ch) = @_;
+    my ($self, $ch, $frame) = @_;
     weaken $self;
-    $ch->push_read( 'AnyEvent::Stomp::Broker::Frame' => sub {
-        my $frame = $_[1];
-        ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
-
+    weaken $ch;
+    ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
+    FRAME_LOGIC: {
         if (not $self->is_connected) {
             # client did not issue a CONNECT yet
             if (($frame->command eq 'CONNECT') and not($self->pending_connect)) {
@@ -115,7 +114,7 @@ sub read_frame {
                     if (not $proto_version) {
                         $self->send_client_error( "Supported protocol versions are: ".join(', ', sort keys %SERVER_PROTOCOLS), $frame );
                         $self->disconnect("Unsupported client protocol version: ".$self);
-                        return;
+                        last FRAME_LOGIC;
                     }
                     $response_frame->headers->{'version'} = $proto_version;
                     $self->protocol_version( $proto_version );
@@ -135,7 +134,7 @@ sub read_frame {
                         $self->disconnect($reason);
                     },
                 );
-                return;
+                last FRAME_LOGIC;
             }
             else {
                 $self->send_client_error( 'Not yet connected', $frame );
@@ -163,13 +162,19 @@ sub read_frame {
                 $self->send_client_error( 'Unexpected frame', $frame );
             }
         }
-    });
+    }
+    if (defined $self) {
+        $ch->on_read(sub { 
+            $ch->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
+        });
+    }
 }
 
 
 sub disconnect {
     my ($self, $reason) = @_;
     my $h = $self->handle;
+    $h->on_read(sub { });
     $h->destroy;
     undef $h;
     my $s = $self->socket;
@@ -185,6 +190,7 @@ sub send_client_frame {
     my ($self, $frame) = @_;
     return if ($self->handle->destroyed);
     $self->handle->push_write( $frame->as_string );
+    #print STDERR "send client frame: ".$frame->command."\n";
     ($DEBUG) && do { print STDERR "Session sent: ".Dump($frame); };
 }
 

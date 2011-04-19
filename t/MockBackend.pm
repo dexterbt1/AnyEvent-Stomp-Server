@@ -47,7 +47,8 @@ has 'pending_messages'          => ( is => 'rw', isa => 'HashRef[Str]', lazy => 
 sub send { 
     my ($self, $sess, $destination, $headers, $body_ref, $success_cb, $fail_cb) = @_;
     if ($self->send_obs->(@_)) {
-        $success_cb->( [ $sess, $destination, $headers, $body_ref ]);
+        $success_cb->( [ $sess, $destination, $headers, $body_ref]);
+        $self->inject_message($destination, $body_ref, $headers);
     }
     else {
         $fail_cb->('backend send simulated fail', [ $sess, $destination, $headers, $body_ref ]);

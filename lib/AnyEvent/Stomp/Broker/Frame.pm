@@ -1,7 +1,9 @@
 package AnyEvent::Stomp::Broker::Frame;
 use strict;
 use Moose;
+use Scalar::Util qw/weaken/;
 our $CRLF = "\n";
+no warnings 'uninitialized';
 
 has 'command' => (is => 'rw', isa => 'Str');
 has 'headers' => (is => 'rw', isa => 'HashRef', lazy => 1, default => sub { {} });
@@ -28,38 +30,37 @@ sub as_string {
 sub anyevent_read_type {
     my ($handle, $cb) = @_;
     return sub {
-        $_[0]->push_read( 
-            regex => qr/.*?\015\012\015\012|\012\012/s, 
-            sub { 
-                my $command;
-                my $raw_headers = $_[1];
-                $raw_headers =~ s[^(\015\012|\012)][]g; # strip extra newlines before the COMMAND
-                my $headers = { };
-                foreach my $line (split /\015\012|\012/, $raw_headers) {
-                    if (not defined $command) {
-                        $command = $line;
-                        next;
-                    }
-                    my ($k, $v) = split /:/, $line, 2;
-                    _decode_header_value($k);
-                    _decode_header_value($v);
-                    $headers->{$k} = $v;
-                }
-                my @args = ('regex' => qr/.*?\000\n*/s);
-                if (my $content_length = $headers->{'content-length'}) {
-                    @args = ('chunk' => $content_length + 1);
-                }
-                my $body;
-                $handle->push_read(@args, sub { 
-                    $body = $_[1];
-                    $body =~ s/\000\n*$//;
-                    # callback w/ the frame
-                    my $frame = __PACKAGE__->new( command => $command, headers => $headers, body_ref => \$body );
-                    $cb->( $_[0], $frame );
-                });
-                return 1;
-            },
-        );
+        $_[0]{rbuf} =~ s/^(.*?)(\015\012\015\012|\012\012)//s
+            or return 0; # no data yet
+        my $raw_headers = $1;
+        my $command;
+        
+        my $headers = { };
+        foreach my $line (split /\015\012|\012/, $raw_headers) {
+            next if ($line eq ''); # ignore black lines; probably keep-alives
+            if (not defined $command) {
+                $command = $line;
+                next;
+            }
+            my ($k, $v) = split /:/, $line, 2;
+            _decode_header_value($k);
+            _decode_header_value($v);
+            $headers->{$k} = $v;
+        }
+        my @args = ('regex' => qr/.*?\000\n*/s);
+        if (my $content_length = $headers->{'content-length'}) {
+            @args = ('chunk' => $content_length + 1);
+        }
+        my $body;
+        ## print STDERR "commands+headers read ...\n";
+        $_[0]->push_read(@args, sub { 
+            $body = $_[1];
+            $body =~ s/\000\n*$//;
+            # callback w/ the frame
+            my $frame = __PACKAGE__->new( command => $command, headers => $headers, body_ref => \$body );
+            $cb->( $_[0], $frame );
+            ## print STDERR "body read ...\n";
+        });
         return 1;
     };
 }
