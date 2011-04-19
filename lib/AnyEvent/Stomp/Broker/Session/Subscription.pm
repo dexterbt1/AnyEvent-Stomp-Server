@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Broker::Session::Subscription;
 use strict;
-use Moose;
+use Mouse;
 use AnyEvent::Stomp::Broker::Constants '-all';
 
 has 'id'            => (is => 'rw', isa => 'Str', required => 1);

@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Broker::Session;
 use strict;
-use Moose;
+use Mouse;
 use YAML;
 use Class::Load ':all';
 use Scalar::Util qw/refaddr weaken/;
@@ -55,7 +55,7 @@ sub BUILD {
     weaken $fh;
     $ch = $self->handle_class->new(
         fh          => $fh,
-        autocork    => 0,
+        autocork    => 1,
         on_error    => sub { 
             $self->disconnect($_[2]); 
         },
@@ -78,15 +78,24 @@ sub DEMOLISH {
 }
 
 
+
+my $FRAME_HANDLERS = {
+    SEND        => 'handle_frame_send',
+    DISCONNECT  => 'handle_frame_disconnect',
+    SUBSCRIBE   => 'handle_frame_subscribe',
+    ACK         => 'handle_frame_ack',
+};
+
 sub read_frame {
     my ($self, $ch, $frame) = @_;
     weaken $self;
     weaken $ch;
     ($DEBUG) && do { print STDERR "Session received: ".Dump($frame); };
     FRAME_LOGIC: {
+        my $frame_command = $frame->{command};
         if (not $self->is_connected) {
             # client did not issue a CONNECT yet
-            if (($frame->command eq 'CONNECT') and not($self->pending_connect)) {
+            if (($frame_command eq 'CONNECT') and not($self->pending_connect)) {
                 $self->protocol_version( $DEFAULT_PROTOCOL );
                 my $response_frame = AnyEvent::Stomp::Broker::Frame->new(
                     command => 'CONNECTED',
@@ -102,9 +111,9 @@ sub read_frame {
 
                 # protocol negotiation: choose the highest version supported by both server and client
                 # ----------------
-                if (exists $frame->headers->{'accept-version'}) {
+                if (exists $frame->{headers}->{'accept-version'}) {
                     my $proto_version = '';
-                    my @client_versions = split /\s*,\s*/, $frame->headers->{'accept-version'};
+                    my @client_versions = split /\s*,\s*/, $frame->{headers}->{'accept-version'};
                     my %client_supported = map { $_ => 1 } @client_versions;
                     foreach my $sv (sort keys %SERVER_PROTOCOLS) {
                         if (exists $client_supported{$sv}) {
@@ -116,7 +125,7 @@ sub read_frame {
                         $self->disconnect("Unsupported client protocol version: ".$self);
                         last FRAME_LOGIC;
                     }
-                    $response_frame->headers->{'version'} = $proto_version;
+                    $response_frame->{headers}->{'version'} = $proto_version;
                     $self->protocol_version( $proto_version );
                 }
 
@@ -145,17 +154,9 @@ sub read_frame {
             # already connected
             # -----------------
             no warnings 'uninitialized';
-            if ($frame->command eq 'DISCONNECT') {
-                $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
-            }
-            elsif ($frame->command eq 'SEND') {
-                $self->handle_frame_send( $frame );
-            }
-            elsif ($frame->command eq 'SUBSCRIBE') {
-                $self->handle_frame_subscribe( $frame );
-            }
-            elsif ($frame->command eq 'ACK') {
-                $self->handle_frame_ack( $frame );
+            if (exists $FRAME_HANDLERS->{$frame_command}) {
+                my $handler = $FRAME_HANDLERS->{$frame_command};
+                $self->$handler($frame);
             }
             else {
                 # unexpected frame
@@ -164,9 +165,7 @@ sub read_frame {
         }
     }
     if (defined $self) {
-        $ch->on_read(sub { 
-            $ch->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
-        });
+        $ch->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
     }
 }
 
@@ -223,9 +222,9 @@ sub send_client_message {
         headers => $headers,
         body_ref => $body_ref,
     );
-    $message_frame->headers->{'message-id'} = $msg_id;
-    $message_frame->headers->{'destination'} = $dest;
-    $message_frame->headers->{'subscription'} = $sub->id;
+    $message_frame->{headers}->{'message-id'} = $msg_id;
+    $message_frame->{headers}->{'destination'} = $dest;
+    $message_frame->{headers}->{'subscription'} = $sub->id;
     $self->send_client_frame($message_frame);
 
     if ($sub->ack == STOMP_ACK_CLIENT) {
@@ -293,10 +292,15 @@ sub ack_pending_message_individual {
 # -----------------
 
 
+sub handle_frame_disconnect {
+    my ($self) = @_;
+    $self->disconnect("Explicit DISCONNECT frame from client: ".$self);
+}
+
 sub handle_frame_ack {
     my ($self, $frame) = @_;
     # required message-id in 1.0,1.1
-    if (not exists $frame->headers->{'message-id'}) {
+    if (not exists $frame->{headers}->{'message-id'}) {
         $self->send_client_error("ACK requires 'message-id' header", $frame);
         return;
     }
@@ -304,14 +308,14 @@ sub handle_frame_ack {
     my $msg_id;
     my $cl_sub_id;
     if ($self->protocol_version eq '1.1') {
-        if (not exists $frame->headers->{'subscription'}) {
+        if (not exists $frame->{headers}->{'subscription'}) {
             $self->send_client_error("ACK requires 'subscription' header", $frame);
             return;
         }
-        $cl_sub_id = $frame->headers->{'subscription'};
+        $cl_sub_id = $frame->{headers}->{'subscription'};
     }
 
-    $msg_id = $frame->headers->{'message-id'};
+    $msg_id = $frame->{headers}->{'message-id'};
 
     # validate existence
     if (not($msg_id) or not(exists $self->pending_messages->{$msg_id})) {
@@ -340,8 +344,8 @@ sub handle_frame_ack {
             elsif ($sub->ack == STOMP_ACK_INDIVIDUAL) {
                 $self->ack_pending_message_individual( $msg_id );
             }
-            if (exists $frame->headers->{'receipt'}) {
-                $self->send_client_receipt( $frame->headers->{'receipt'} );
+            if (exists $frame->{headers}->{'receipt'}) {
+                $self->send_client_receipt( $frame->{headers}->{'receipt'} );
             }
         },
         sub { 
@@ -358,19 +362,19 @@ sub handle_frame_ack {
 sub handle_frame_send {
     my ($self, $frame) = @_;
     # 1.0 requires destination
-    if (not exists $frame->headers->{'destination'}) {
+    if (not exists $frame->{headers}->{'destination'}) {
         $self->send_client_error( 'SEND header "destination" required', $frame );
         return;
     }
-    my $destination = delete $frame->headers->{'destination'};
-    my $has_receipt = exists $frame->headers->{'receipt'};
-    my $receipt_id  = delete $frame->headers->{'receipt'};
+    my $destination = delete $frame->{headers}->{'destination'};
+    my $has_receipt = exists $frame->{headers}->{'receipt'};
+    my $receipt_id  = delete $frame->{headers}->{'receipt'};
     weaken $self;
     $self->parent_broker->backend->send(
         $self,
         $destination, 
-        $frame->headers, 
-        $frame->body_ref,
+        $frame->{headers}, 
+        $frame->{body_ref},
         sub {
             # backend send success
             if ($has_receipt) {
@@ -392,25 +396,25 @@ sub handle_frame_subscribe {
     # validate subscribe frame
     # ------------------------
     # 1.0 requires 'destination'
-    if (not exists $frame->headers->{'destination'}) {
+    if (not exists $frame->{headers}->{'destination'}) {
         $self->send_client_error( 'SUBSCRIBE header "destination" required', $frame);
         return;
     }
-    my $destination = $frame->headers->{'destination'};
+    my $destination = $frame->{headers}->{'destination'};
     my $subscription_id = $destination; # use the destination for 1.0 clients
     if ($self->protocol_version eq '1.1') {
         # 1.1 requires 'id'
-        if (not exists $frame->headers->{'id'}) {
+        if (not exists $frame->{headers}->{'id'}) {
             $self->send_client_error( 'SUBSCRIBE header "id" required', $frame);
             return;
         }
-        $subscription_id = $frame->headers->{'id'};
+        $subscription_id = $frame->{headers}->{'id'};
     }
     my %opts = (
         ack         => STOMP_ACK_AUTO(),
     );
-    if (exists $frame->headers->{'ack'}) {
-        my $ack = $frame->headers->{'ack'} || '';
+    if (exists $frame->{headers}->{'ack'}) {
+        my $ack = $frame->{headers}->{'ack'} || '';
         if ($ack eq 'auto') {
             $opts{ack} = STOMP_ACK_AUTO();
         }
@@ -442,12 +446,12 @@ sub handle_frame_subscribe {
         sub {
             # successful subscription
             my ($sub) = @_;
-            if (exists $frame->headers->{'receipt'}) {
+            if (exists $frame->{headers}->{'receipt'}) {
                 my $sub_receipt_headers = { };
                 if ($sub->session->protocol_version eq '1.1') {
                     $sub_receipt_headers->{'id'} = $sub->id;
                 }
-                $self->send_client_receipt($frame->headers->{'receipt'}, $sub_receipt_headers);
+                $self->send_client_receipt($frame->{headers}->{'receipt'}, $sub_receipt_headers);
             }
         },
         sub {

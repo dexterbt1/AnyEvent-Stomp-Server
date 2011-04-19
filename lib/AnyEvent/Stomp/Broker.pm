@@ -3,7 +3,7 @@ use strict;
 
 our $VERSION = '0.10';
 
-use Moose;
+use Mouse;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Stomp::Broker::Session;

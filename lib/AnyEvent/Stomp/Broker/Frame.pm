@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Broker::Frame;
 use strict;
-use Moose;
+use Mouse;
 use Scalar::Util qw/weaken/;
 our $CRLF = "\n";
 no warnings 'uninitialized';
@@ -16,15 +16,25 @@ sub body_as_string {
 
 sub as_string {
     my ($self) = @_;
-    my $body_str = $self->body_as_string;
-    my %h = %{$self->headers};
+
+    my $out = '';
+    $out .= $self->{command}.$CRLF;
+
+    my $b_ref = $self->{body_ref};
+    my $body_str = ref($b_ref) ? $$b_ref : ''; # inline impl
+
+    my %h = %{$self->{headers}};
     $h{'content-length'} = length($body_str);
-    join($CRLF,
-        $self->command || '',
-        _headers_as_string(\%h),
-        '',
-        $body_str."\000",
-    );
+    foreach (sort keys %h) {
+        my ($k, $v) = ($_, $h{$_});
+        $out .= _encode_header_value($k).":"._encode_header_value($v).$CRLF;
+        #$out .= "$k:$v$CRLF";
+    }
+    $out .= $CRLF;
+
+    $out .= $body_str."\000",
+
+    return $out;
 }
 
 sub anyevent_read_type {
@@ -83,6 +93,7 @@ sub _headers_as_string {
 
 sub _encode_header_value {
     # mutator
+    return $_[0] if (not $_[0]=~/[\\\n:]/);
     $_[0] =~ s/\\/\\\\/g;
     $_[0] =~ s/\n/\\n/g;
     $_[0] =~ s/:/\\c/g;

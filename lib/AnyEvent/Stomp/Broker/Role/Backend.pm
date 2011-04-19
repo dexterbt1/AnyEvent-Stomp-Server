@@ -1,5 +1,5 @@
 package AnyEvent::Stomp::Broker::Role::Backend;
-use Moose::Role;
+use Mouse::Role;
 
 requires 'connect';                     # $be->connect($session, $success_cb, $failure_cb)
     # success_cb( $session )

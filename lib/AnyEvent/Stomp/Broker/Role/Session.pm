@@ -1,5 +1,5 @@
 package AnyEvent::Stomp::Broker::Role::Session;
-use Moose::Role;
+use Mouse::Role;
 
 has 'session_id'            => ( is => 'rw', isa => 'Any' );
 
