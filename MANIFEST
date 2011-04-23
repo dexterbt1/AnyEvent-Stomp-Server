@@ -1,11 +1,11 @@
 Build.PL
-lib/AnyEvent/Stomp/Broker.pm
-lib/AnyEvent/Stomp/Broker/Constants.pm
-lib/AnyEvent/Stomp/Broker/Frame.pm
-lib/AnyEvent/Stomp/Broker/Role/Backend.pm
-lib/AnyEvent/Stomp/Broker/Role/Session.pm
-lib/AnyEvent/Stomp/Broker/Session.pm
-lib/AnyEvent/Stomp/Broker/Session/Subscription.pm
+lib/AnyEvent/Stomp/Server.pm
+lib/AnyEvent/Stomp/Server/Constants.pm
+lib/AnyEvent/Stomp/Server/Frame.pm
+lib/AnyEvent/Stomp/Server/Role/Backend.pm
+lib/AnyEvent/Stomp/Server/Role/Session.pm
+lib/AnyEvent/Stomp/Server/Session.pm
+lib/AnyEvent/Stomp/Server/Session/Subscription.pm
 MANIFEST			This list of files
 MANIFEST.SKIP
 README.md
@@ -26,4 +26,4 @@ t/ae-stomp/t/manifest.t
 t/ae-stomp/t/pod.t
 t/MockBackend.pm
 t/StompClient.pm
-t/TestBroker.pm
+t/TestServer.pm

@@ -1,4 +1,4 @@
-package AnyEvent::Stomp::Broker::Constants;
+package AnyEvent::Stomp::Server::Constants;
 use strict;
 use Sub::Exporter -setup => {
     exports => [

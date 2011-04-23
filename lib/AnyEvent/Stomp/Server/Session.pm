@@ -1,15 +1,15 @@
-package AnyEvent::Stomp::Broker::Session;
+package AnyEvent::Stomp::Server::Session;
 use strict;
 use Mouse;
 use YAML;
 use Class::Load ':all';
 use Scalar::Util qw/refaddr weaken/;
-use AnyEvent::Stomp::Broker::Session::Subscription;
-use AnyEvent::Stomp::Broker::Constants '-all';
+use AnyEvent::Stomp::Server::Session::Subscription;
+use AnyEvent::Stomp::Server::Constants '-all';
 
 #use Devel::Refcount qw( refcount );
 
-with 'AnyEvent::Stomp::Broker::Role::Session';
+with 'AnyEvent::Stomp::Server::Role::Session';
 
 our $DEBUG = 0;
 our $DEFAULT_PROTOCOL = '1.0';
@@ -18,13 +18,14 @@ our %SERVER_PROTOCOLS = (
     '1.1'   => 1,
 );
 
-has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Broker', weak_ref => 1 );
+has 'parent_broker'         => ( is => 'rw', isa => 'AnyEvent::Stomp::Server', weak_ref => 1 );
 
 has 'socket'                => ( is => 'rw', isa => 'GlobRef|Undef', required => 1, weak_ref => 1 );
 has 'host'                  => ( is => 'rw', isa => 'Any', required => 1 );
 has 'port'                  => ( is => 'rw', isa => 'Any', required => 1 );
-has 'frame_class'           => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Stomp::Broker::Frame' );
+has 'frame_class'           => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Stomp::Server::Frame' );
 has 'handle_class'          => ( is => 'rw', isa => 'Str', lazy => 1, default => 'AnyEvent::Handle' );
+has 'handle_args'           => ( is => 'rw', isa => 'HashRef' );
 has 'handle'                => ( is => 'rw', isa => 'Any' );
 
 has 'pending_connect'       => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
@@ -53,15 +54,20 @@ sub BUILD {
     my $fh = $self->socket;
     binmode $fh;
     weaken $fh;
+    my %handle_args = ();
+    if ($self->handle_args) {
+        %handle_args = %{$self->handle_args};
+    }
     $ch = $self->handle_class->new(
         fh          => $fh,
-        autocork    => 1,
+        autocork    => 0,
         on_error    => sub { 
             $self->disconnect($_[2]); 
         },
         on_eof      => sub { 
             $self->disconnect("Client socket disconnected"); 
         },
+        %handle_args,
     );
     $self->handle($ch);
     $self->session_id( 'sessid-'.refaddr($self) );
@@ -97,7 +103,7 @@ sub read_frame {
             # client did not issue a CONNECT yet
             if (($frame_command eq 'CONNECT') and not($self->pending_connect)) {
                 $self->protocol_version( $DEFAULT_PROTOCOL );
-                my $response_frame = AnyEvent::Stomp::Broker::Frame->new(
+                my $response_frame = AnyEvent::Stomp::Server::Frame->new(
                     command => 'CONNECTED',
                     headers => {
                         "session"       => sprintf("%s",$self->session_id),
@@ -143,6 +149,7 @@ sub read_frame {
                         $self->disconnect($reason);
                     },
                 );
+                $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
                 last FRAME_LOGIC;
             }
             else {
@@ -161,12 +168,13 @@ sub read_frame {
             else {
                 # unexpected frame
                 $self->send_client_error( 'Unexpected frame', $frame );
+                $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             }
         }
     }
-    if (defined $self) {
-        $ch->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
-    }
+    #if (defined $self) {
+    #    $ch->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
+    #}
 }
 
 
@@ -198,7 +206,7 @@ sub send_client_receipt {
     my ($self, $receipt_id, $opt_headers) = @_;
     my $headers = (defined $opt_headers) ? $opt_headers : { };
     $headers->{'receipt-id'} = $receipt_id;
-    $self->send_client_frame( AnyEvent::Stomp::Broker::Frame->new( command => 'RECEIPT', headers => $headers, ) );
+    $self->send_client_frame( AnyEvent::Stomp::Server::Frame->new( command => 'RECEIPT', headers => $headers, ) );
 }
 
 
@@ -206,7 +214,7 @@ sub send_client_error {
     my ($self, $message, $original_frame) = @_;
     no warnings 'uninitialized';
     ($DEBUG) && do { print STDERR "client_error: ".$message."\n"; };
-    my $f = AnyEvent::Stomp::Broker::Frame->new( command => 'ERROR', headers => { 'message' => $message || '' } );
+    my $f = AnyEvent::Stomp::Server::Frame->new( command => 'ERROR', headers => { 'message' => $message || '' } );
     if ($original_frame && exists($original_frame->{headers}->{'receipt'})) { 
         $f->{headers}->{'receipt-id'} = $original_frame->{headers}->{'receipt'};
     }
@@ -217,7 +225,7 @@ sub send_client_error {
 sub send_client_message {
     my ($self, $sub, $msg_id, $dest, $body_ref, $headers) = @_;
     weaken $self;
-    my $message_frame = AnyEvent::Stomp::Broker::Frame->new(
+    my $message_frame = AnyEvent::Stomp::Server::Frame->new(
         command => 'MESSAGE',
         headers => $headers,
         body_ref => $body_ref,
@@ -255,11 +263,13 @@ sub send_client_message {
             sub { 
                 # successful ack
                 # nop
+                $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             },
             sub { 
                 # backend error during ack
                 my ($reason, $sess, $msg_id) = @_;
                 $self->send_client_error($reason);
+                $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             },
         );
     } 
@@ -302,6 +312,7 @@ sub handle_frame_ack {
     # required message-id in 1.0,1.1
     if (not exists $frame->{headers}->{'message-id'}) {
         $self->send_client_error("ACK requires 'message-id' header", $frame);
+        $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         return;
     }
 
@@ -310,6 +321,7 @@ sub handle_frame_ack {
     if ($self->protocol_version eq '1.1') {
         if (not exists $frame->{headers}->{'subscription'}) {
             $self->send_client_error("ACK requires 'subscription' header", $frame);
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             return;
         }
         $cl_sub_id = $frame->{headers}->{'subscription'};
@@ -320,6 +332,7 @@ sub handle_frame_ack {
     # validate existence
     if (not($msg_id) or not(exists $self->pending_messages->{$msg_id})) {
         $self->send_client_error(sprintf("ACK error for non-existent message-id '%s'", $msg_id), $frame);
+        $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         return;
     }
 
@@ -328,6 +341,7 @@ sub handle_frame_ack {
     if (defined $cl_sub_id) {
         if ($sub->id ne $cl_sub_id) {
             $self->send_client_error(sprintf("ACK error for non-existent subscription '%s'", $cl_sub_id), $frame);
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             return;
         }
     }
@@ -347,11 +361,13 @@ sub handle_frame_ack {
             if (exists $frame->{headers}->{'receipt'}) {
                 $self->send_client_receipt( $frame->{headers}->{'receipt'} );
             }
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         },
         sub { 
             # backend error during ack
             my ($reason, $sess, $msg_id) = @_;
             $self->send_client_error($reason);
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         },
     );
 
@@ -380,6 +396,7 @@ sub handle_frame_send {
             if ($has_receipt) {
                 $self->send_client_receipt( $receipt_id );
             }
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         },
         sub {
             # backend send fail
@@ -398,6 +415,7 @@ sub handle_frame_subscribe {
     # 1.0 requires 'destination'
     if (not exists $frame->{headers}->{'destination'}) {
         $self->send_client_error( 'SUBSCRIBE header "destination" required', $frame);
+        $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         return;
     }
     my $destination = $frame->{headers}->{'destination'};
@@ -406,6 +424,7 @@ sub handle_frame_subscribe {
         # 1.1 requires 'id'
         if (not exists $frame->{headers}->{'id'}) {
             $self->send_client_error( 'SUBSCRIBE header "id" required', $frame);
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             return;
         }
         $subscription_id = $frame->{headers}->{'id'};
@@ -429,10 +448,11 @@ sub handle_frame_subscribe {
                 'Supported SUBSCRIBE header "ack" are: '.join(',', 'auto', 'client', 'client-individual'), 
                 $frame,
             );
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
             return;
         }
     }
-    my $subscription = AnyEvent::Stomp::Broker::Session::Subscription->new(
+    my $subscription = AnyEvent::Stomp::Server::Session::Subscription->new(
         id          => $subscription_id,
         session     => $self,
         destination => $destination,
@@ -453,6 +473,7 @@ sub handle_frame_subscribe {
                 }
                 $self->send_client_receipt($frame->{headers}->{'receipt'}, $sub_receipt_headers);
             }
+            $self->handle->push_read( $self->frame_class, sub { $self->read_frame(@_) } );
         },
         sub {
             # failed subscription

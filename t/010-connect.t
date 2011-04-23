@@ -2,7 +2,7 @@ use strict;
 use Test::More tests => 14;
 
 BEGIN {
-    use_ok 'AnyEvent::Stomp::Broker';
+    use_ok 'AnyEvent::Stomp::Server';
     use_ok 'YAML';
     require 't/MockBackend.pm';
     require 't/StompClient.pm';
@@ -11,7 +11,7 @@ BEGIN {
 my $PORT = 16163;
 
 my $backend = MockBackend->new;
-my $server = AnyEvent::Stomp::Broker->new( listen_port => $PORT, backend => $backend );
+my $server = AnyEvent::Stomp::Server->new( listen_port => $PORT, backend => $backend );
 
 # basic connect
 {

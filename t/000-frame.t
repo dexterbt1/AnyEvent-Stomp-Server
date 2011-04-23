@@ -3,14 +3,14 @@ use strict;
 use warnings;
 
 BEGIN {
-    use_ok 'AnyEvent::Stomp::Broker::Frame';
+    use_ok 'AnyEvent::Stomp::Server::Frame';
     use_ok 'AnyEvent::Handle';
     use_ok 'AnyEvent::Socket';
     use_ok 'YAML';
 }
 
-my $CLASS = 'AnyEvent::Stomp::Broker::Frame';
-my $CRLF = $AnyEvent::Stomp::Broker::Frame::CRLF;
+my $CLASS = 'AnyEvent::Stomp::Server::Frame';
+my $CRLF = $AnyEvent::Stomp::Server::Frame::CRLF;
 my $HOST = 'localhost';
 my $PORT = 16164;
 

@@ -1,7 +1,7 @@
 package MockBackend;
 use strict;
 use Mouse;
-with 'AnyEvent::Stomp::Broker::Role::Backend';
+with 'AnyEvent::Stomp::Server::Role::Backend';
 use Data::UUID;
 my $data_uuid = Data::UUID->new;
 

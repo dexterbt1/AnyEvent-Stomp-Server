@@ -1,4 +1,4 @@
-package AnyEvent::Stomp::Broker::Role::Session;
+package AnyEvent::Stomp::Server::Role::Session;
 use Mouse::Role;
 
 has 'session_id'            => ( is => 'rw', isa => 'Any' );

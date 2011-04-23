@@ -1,4 +1,4 @@
-package AnyEvent::Stomp::Broker::Frame;
+package AnyEvent::Stomp::Server::Frame;
 use strict;
 use Mouse;
 use Scalar::Util qw/weaken/;
