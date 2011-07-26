@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Server::Frame;
 use strict;
-use Mouse;
+use Any::Moose;
 use Scalar::Util qw/weaken/;
 our $CRLF = "\n";
 no warnings 'uninitialized';

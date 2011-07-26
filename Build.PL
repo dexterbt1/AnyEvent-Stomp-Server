@@ -14,8 +14,10 @@ my $builder = Module::Build->new(
         'Object::Event'         => '1.21',
         'Sub::Exporter'         => 0,
         'AnyEvent'              => '5.31',
+        'Any::Moose'            => 0,
+        'Mouse'                 => 0,
     },
-    add_to_cleanup      => [ 'AnyEvent-Stomp-Broker-*' ],
+    add_to_cleanup      => [ 'AnyEvent-Stomp-Server-*' ],
     create_makefile_pl => 'traditional',
 );
 

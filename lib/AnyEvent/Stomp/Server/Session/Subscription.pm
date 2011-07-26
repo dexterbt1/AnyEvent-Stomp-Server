@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Server::Session::Subscription;
 use strict;
-use Mouse;
+use Any::Moose;
 use AnyEvent::Stomp::Server::Constants '-all';
 
 has 'id'            => (is => 'rw', isa => 'Str', required => 1);

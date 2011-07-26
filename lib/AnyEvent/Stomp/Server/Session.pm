@@ -1,6 +1,6 @@
 package AnyEvent::Stomp::Server::Session;
 use strict;
-use Mouse;
+use Any::Moose;
 use YAML;
 use Class::Load ':all';
 use Scalar::Util qw/refaddr weaken/;
